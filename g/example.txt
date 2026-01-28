@@ -1,0 +1,10 @@
+SELECT SUM(`p_amount`) AS total FROM `popsupermarket`;
+
+SELECT SUM(`p_amount`) AS total FROM `popsupermarket` 
+WHERE `p_country`='Canada'
+
+SELECT SUM(`p_amount`) AS total FROM `popsupermarket` 
+WHERE `p_country`='Sweden' 
+AND `p_category`='Vegetables'; or LIKE '%Veg%';
+
+SELECT `p_country`, SUM(`p_amount`)AS total FROM `popsupermarket` GROUP BY `p_country`;
