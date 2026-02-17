@@ -12,6 +12,11 @@
 <form method="post" actions="">
     ชื่อภาค <input type="text" name="rname" autofocus required><br>
     รูป <input type="file" name="pimage" required><br>
+
+    ภาค --<select name="rid">
+        <option value="xxx">xxx</option>
+    </select>
+    <br>
     <button type="submit" name="Submit">บันทึก</button>
 </form>
 
