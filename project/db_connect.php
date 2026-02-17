@@ -4,7 +4,7 @@
 $host = 'localhost';
 $dbname = 'shop_db';
 $username = 'root';
-$password = 'r660109';
+$password = '';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
@@ -47,72 +47,8 @@ try {
         $sql = "DELETE FROM $table WHERE $where";
         return query($sql, $params)->rowCount();
     }
-    function uploadImage($file, $folder = 'products', $max_size = 5) {
-        $target_dir = "uploads/$folder/";
-        
-        // สร้างโฟลเดอร์ถ้ายังไม่มี
-        if(!file_exists($target_dir)) {
-            mkdir($target_dir, 0777, true);
-        }
-        
-        // ตรวจสอบไฟล์
-        if($file['error'] != UPLOAD_ERR_OK) {
-            return ['success' => false, 'message' => 'เกิดข้อผิดพลาดในการอัปโหลด'];
-        }
-        
-        // ตรวจสอบขนาดไฟล์ (default 5MB)
-        if($file['size'] > $max_size * 1024 * 1024) {
-            return ['success' => false, 'message' => "ไฟล์ต้องไม่เกิน $max_size MB"];
-        }
-        
-        // ตรวจสอบประเภทไฟล์
-        $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime_type = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
-        
-        if(!in_array($mime_type, $allowed_types)) {
-            return ['success' => false, 'message' => 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, GIF, WEBP'];
-        }
-        
-        // สร้างชื่อไฟล์ใหม่
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $new_filename = uniqid() . '_' . time() . '.' . $extension;
-        $target_file = $target_dir . $new_filename;
-        
-        // อัปโหลดไฟล์
-        if(move_uploaded_file($file['tmp_name'], $target_file)) {
-            return [
-                'success' => true,
-                'filename' => $new_filename,
-                'path' => $target_file,
-                'url' => $target_file
-            ];
-        } else {
-            return ['success' => false, 'message' => 'ไม่สามารถอัปโหลดไฟล์ได้'];
-        }
-    }
-
-    // ฟังก์ชันลบรูปภาพ
-    function deleteImage($filename, $folder = 'products') {
-        if(empty($filename)) return true;
-        
-        $filepath = "uploads/$folder/$filename";
-        if(file_exists($filepath)) {
-            return unlink($filepath);
-        }
-        return true;
-    }
-
-    // ฟังก์ชันแสดงรูปภาพ (พร้อม fallback)
-    function showImage($filename, $folder = 'products', $default = 'default.jpg') {
-        if(!empty($filename) && file_exists("uploads/$folder/$filename")) {
-            return "uploads/$folder/$filename";
-        }
-        return "uploads/$folder/$default";
-    }
-        
-    } catch(PDOException $e) {
-        die("Connection failed: " . $e->getMessage());
-    }
+    
+} catch(PDOException $e) {
+    die("Connection failed: " . $e->getMessage());
+}
 ?>
