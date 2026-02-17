@@ -31,8 +31,10 @@ if(isset($_POST["Submit"])) {
     include_once("connectdb.php");
     $pname = $_POST["pname"];
     $ext = pathinfo(($_FILES['pimage']['name']), PATHINFO_EXTENSION);
-    $sql2 = "INSERT INTO `provinces` VALUES (NULL, '{$pname}''{$rname}''{$rname}''{$rname}');";
+    $sql2 = "INSERT INTO `provinces` VALUES (NULL, '{$pname}''{$ext}''{$rid}');";
     mysqli_query($conn, $sql2) or die("เพิ่มข้อมูลไม่ได้");
+    $pid = mysqli_insert_id($conn);
+    copy($_FILES["pimage"]["tmp_name"],"images/".);
 }
 ?>
 
