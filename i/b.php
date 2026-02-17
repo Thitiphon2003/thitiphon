@@ -29,8 +29,9 @@ while ($data3 = mysqli_fetch_array($rs3))
 <?php 
 if(isset($_POST["Submit"])) {
     include_once("connectdb.php");
-    $rname = $_POST["rname"];
-    $sql2 = "INSERT INTO `provinces` (`r_id`, `r_name`) VALUES (NULL, '{$rname}');";
+    $pname = $_POST["pname"];
+    $ext = pathinfo(($_FILES['pimage']['name']), PATHINFO_EXTENSION);
+    $sql2 = "INSERT INTO `provinces` VALUES (NULL, '{$pname}''{$rname}''{$rname}''{$rname}');";
     mysqli_query($conn, $sql2) or die("เพิ่มข้อมูลไม่ได้");
 }
 ?>
