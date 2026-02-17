@@ -106,16 +106,13 @@ try {
 
     // ฟังก์ชันแสดงรูปภาพ (พร้อม fallback)
     function showImage($filename, $folder = 'products', $default = 'default.jpg') {
-        // ถ้าไม่มีชื่อไฟล์ หรือไฟล์ไม่มีอยู่จริง
-        if(empty($filename) || !file_exists("uploads/$folder/$filename")) {
-            // เช็คว่ามีรูป default หรือไม่
-            if(file_exists("uploads/$folder/$default")) {
-                return "uploads/$folder/$default";
-            }
-            // ถ้าไม่มีรูป default ให้ใช้ placeholder
-            return "https://via.placeholder.com/300x300?text=No+Image";
+        if(!empty($filename) && file_exists("uploads/$folder/$filename")) {
+            return "uploads/$folder/$filename";
         }
-        return "uploads/$folder/$filename";
+        return "uploads/$folder/$default";
     }
-}
+        
+    } catch(PDOException $e) {
+        die("Connection failed: " . $e->getMessage());
+    }
 ?>
