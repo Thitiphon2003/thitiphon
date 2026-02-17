@@ -33,6 +33,7 @@ $rs = mysqli_query($conn,$sql);
     <tr>
         <th>รหัสภาค</th>
         <th>ชื่อภาค</th>
+        <th>รูป</th>
     </tr>
 <?php 
 while ($data = mysqli_fetch_array($rs)){
