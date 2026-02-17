@@ -13,7 +13,7 @@
     ชื่อภาค <input type="text" name="rname" autofocus required><br>
     รูป <input type="file" name="pimage" required><br>
 
-    ภาค --<select name="rid">
+    ภาค<select name="rid">
 <?php
 include_once("connectdb.php");
 $sql3 = "SELECT * FROM `regions`";
