@@ -10,7 +10,8 @@
 <body>
 <h1> งาน i ฐิติพล มหานาม (บอส) <br>66010914140 </h1>
 <form method="post" actions="">
-    ชื่อภาค <input type="text" name="rname" autofocus required>
+    ชื่อภาค <input type="text" name="rname" autofocus required><br>
+    รูป <input type="file" name="pimage" required><br>
     <button type="submit" name="Submit">บันทึก</button>
 </form>
 
