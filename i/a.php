@@ -26,8 +26,8 @@ if(isset($_POST["Submit"])) {
 <?php
 include_once("connectdb.php");
 $sql = "SELECT * FROM `regions`";
-$rs = mysqli_query($conn,$sql);
-while ($data = mysqli_fetch_array($rs))
+$rs = mysqli_query($conn,$sql); 
+
 ?>
 
 <table border="1">
