@@ -16,7 +16,7 @@
     ภาค<select name="rid">
 <?php
 include_once("connectdb.php");
-$sql3 = "SELECT * FROM `regions`";
+$sql3 = "SELECT * FROM `provinces`";
 $rs3 = mysqli_query($conn,$sql3);
 while ($data3 = mysqli_fetch_array($rs3))
 ?>
@@ -30,7 +30,7 @@ while ($data3 = mysqli_fetch_array($rs3))
 if(isset($_POST["Submit"])) {
     include_once("connectdb.php");
     $rname = $_POST["rname"];
-    $sql2 = "INSERT INTO `regions` (`r_id`, `r_name`) VALUES (NULL, '{$rname}');";
+    $sql2 = "INSERT INTO `provinces` (`r_id`, `r_name`) VALUES (NULL, '{$rname}');";
     mysqli_query($conn, $sql2) or die("เพิ่มข้อมูลไม่ได้");
 }
 ?>
