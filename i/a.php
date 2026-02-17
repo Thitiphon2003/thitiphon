@@ -27,6 +27,7 @@ if(isset($_POST["Submit"])) {
 include_once("connectdb.php");
 $sql = "SELECT * FROM `regions`";
 $rs = mysqli_query($conn,$sql);
+while ($data = mysqli_fetch_array($rs))
 ?>
 
 <table border="1">
@@ -35,6 +36,7 @@ $rs = mysqli_query($conn,$sql);
         <th>ชื่อภาค</th>
     </tr>
 <?php 
+
 while ($data = mysqli_fetch_array($rs)){
     ?>
     <tr>

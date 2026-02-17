@@ -14,7 +14,13 @@
     รูป <input type="file" name="pimage" required><br>
 
     ภาค --<select name="rid">
-        <option value="xxx">xxx</option>
+<?php
+include_once("connectdb.php");
+$sql3 = "SELECT * FROM `regions`";
+$rs3 = mysqli_query($conn,$sql3);
+while ($data3 = mysqli_fetch_array($rs3))
+?>
+        <option value="<?php echo $data['r_id'];?>"><?php echo $data['r_name'];?></option>
     </select>
     <br>
     <button type="submit" name="Submit">บันทึก</button>
@@ -40,6 +46,7 @@ $rs = mysqli_query($conn,$sql);
         <th>รหัสภาค</th>
         <th>ชื่อภาค</th>
         <th>รูป</th>
+        <th>ลบ</th>
     </tr>
 <?php 
 while ($data = mysqli_fetch_array($rs)){
