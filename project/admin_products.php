@@ -20,6 +20,35 @@ if(!$admin) {
 $success_message = '';
 $error_message = '';
 
+// ฟังก์ชันสร้าง slug จากชื่อสินค้า
+function createSlug($text) {
+    // แปลงภาษาไทยเป็นภาษาอังกฤษ (แบบง่าย)
+    $thai_to_eng = [
+        'ก' => 'k', 'ข' => 'kh', 'ฃ' => 'kh', 'ค' => 'kh', 'ฅ' => 'kh', 'ฆ' => 'kh',
+        'ง' => 'ng', 'จ' => 'ch', 'ฉ' => 'ch', 'ช' => 'ch', 'ซ' => 's', 'ฌ' => 'ch',
+        'ญ' => 'y', 'ฎ' => 'd', 'ฏ' => 't', 'ฐ' => 'th', 'ฑ' => 'th', 'ฒ' => 'th',
+        'ณ' => 'n', 'ด' => 'd', 'ต' => 't', 'ถ' => 'th', 'ท' => 'th', 'ธ' => 'th',
+        'น' => 'n', 'บ' => 'b', 'ป' => 'p', 'ผ' => 'ph', 'ฝ' => 'f', 'พ' => 'ph',
+        'ฟ' => 'f', 'ภ' => 'ph', 'ม' => 'm', 'ย' => 'y', 'ร' => 'r', 'ล' => 'l',
+        'ว' => 'w', 'ศ' => 's', 'ษ' => 's', 'ส' => 's', 'ห' => 'h', 'ฬ' => 'l',
+        'อ' => 'a', 'ฮ' => 'h',
+        'ะ' => 'a', 'ั' => 'a', 'า' => 'a', 'ำ' => 'am', 'ิ' => 'i', 'ี' => 'i',
+        'ึ' => 'ue', 'ื' => 'ue', 'ุ' => 'u', 'ู' => 'u', 'เ' => 'e', 'แ' => 'ae',
+        'โ' => 'o', 'ใ' => 'ai', 'ไ' => 'ai', 'ๆ' => '', '็' => '', '่' => '',
+        '้' => '', '๊' => '', '๋' => '', '์' => '', 'ํ' => ''
+    ];
+    
+    // แทนที่ภาษาไทย
+    $text = strtr($text, $thai_to_eng);
+    
+    // แทนที่ช่องว่างและอักขระพิเศษ
+    $text = preg_replace('/[^a-z0-9-]/', '-', strtolower(trim($text)));
+    $text = preg_replace('/-+/', '-', $text);
+    $text = trim($text, '-');
+    
+    return $text ?: 'product-' . time();
+}
+
 // ============================================
 // จัดการการลบสินค้า
 // ============================================
@@ -73,12 +102,22 @@ if(isset($_POST['add_product'])) {
         if($stock < 0) $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
         
         if(empty($errors)) {
+            // สร้าง slug จากชื่อสินค้า
+            $slug = createSlug($name);
+            
+            // ตรวจสอบ slug ซ้ำ
+            $check_slug = fetchOne("SELECT id FROM products WHERE slug = ?", [$slug]);
+            if($check_slug) {
+                $slug = $slug . '-' . time();
+            }
+            
             // บันทึกข้อมูลสินค้าก่อนเพื่อให้ได้ ID
-            $sql = "INSERT INTO products (name, description, price, original_price, stock, category_id, seller_id, status, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            $sql = "INSERT INTO products (name, slug, description, price, original_price, stock, category_id, seller_id, status, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
             
             query($sql, [
                 $name,
+                $slug,
                 $description,
                 $price,
                 $original_price,
@@ -151,7 +190,7 @@ if(isset($_POST['edit_product'])) {
             }
         }
         
-        // อัปเดตข้อมูล
+        // อัปเดตข้อมูล (ไม่ต้องเปลี่ยน slug)
         if(empty($errors)) {
             $sql = "UPDATE products SET 
                     name = ?, 
