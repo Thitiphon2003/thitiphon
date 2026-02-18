@@ -36,18 +36,18 @@ if(isset($_GET['delete'])) {
         if($product) {
             // ลบรูปภาพถ้ามี
             if(!empty($product['image'])) {
-                deleteImage($product['image'], 'products');
+                $image_path = "uploads/products/" . $product['image'];
+                if(file_exists($image_path)) {
+                    unlink($image_path);
+                }
             }
             
             // ลบข้อมูลสินค้า
-            $result = delete('products', 'id = ?', [$product_id]);
+            $sql = "DELETE FROM products WHERE id = ?";
+            query($sql, [$product_id]);
             
-            if($result) {
-                $pdo->commit();
-                $_SESSION['success'] = 'ลบสินค้าเรียบร้อยแล้ว';
-            } else {
-                throw new Exception('ไม่สามารถลบสินค้าได้');
-            }
+            $pdo->commit();
+            $_SESSION['success'] = 'ลบสินค้าเรียบร้อยแล้ว';
         } else {
             throw new Exception('ไม่พบสินค้าที่ต้องการลบ');
         }
@@ -185,7 +185,10 @@ if(isset($_POST['edit_product'])) {
                 if($upload['success']) {
                     // ลบรูปเก่า
                     if(!empty($old_product['image'])) {
-                        deleteImage($old_product['image'], 'products');
+                        $old_image_path = "uploads/products/" . $old_product['image'];
+                        if(file_exists($old_image_path)) {
+                            unlink($old_image_path);
+                        }
                     }
                     $image = $upload['filename'];
                 } else {
@@ -243,16 +246,39 @@ if(isset($_POST['edit_product'])) {
 // ดึงข้อมูลสำหรับแสดงผล
 // ============================================
 
-// ดึงข้อมูลสินค้าทั้งหมด
+// ดึงข้อมูลสินค้าทั้งหมด พร้อมชื่อหมวดหมู่และร้านค้า
 try {
-    $products = fetchAll("SELECT p.*, c.name as category_name, s.name as seller_name 
-                          FROM products p 
-                          LEFT JOIN categories c ON p.category_id = c.id 
-                          LEFT JOIN sellers s ON p.seller_id = s.id 
-                          ORDER BY p.id DESC");
+    $sql = "SELECT p.*, 
+                   c.name as category_name, 
+                   s.name as seller_name 
+            FROM products p 
+            LEFT JOIN categories c ON p.category_id = c.id 
+            LEFT JOIN sellers s ON p.seller_id = s.id 
+            ORDER BY p.id DESC";
+    
+    $products = fetchAll($sql);
+    
+    // เก็บจำนวนไว้ในตัวแปรเพื่อใช้กับ stats
+    $total_products = count($products);
+    $active_products = 0;
+    $total_stock = 0;
+    $total_value = 0;
+    
+    foreach($products as $product) {
+        if($product['status'] == 'active') {
+            $active_products++;
+        }
+        $total_stock += (int)$product['stock'];
+        $total_value += (float)$product['price'] * (int)$product['stock'];
+    }
+    
 } catch(Exception $e) {
     $error_message = 'ไม่สามารถดึงข้อมูลสินค้า: ' . $e->getMessage();
     $products = [];
+    $total_products = 0;
+    $active_products = 0;
+    $total_stock = 0;
+    $total_value = 0;
 }
 
 // ดึงข้อมูลหมวดหมู่
@@ -720,16 +746,46 @@ if(isset($_GET['edit'])) {
             border: 1px solid #fecaca;
         }
 
-        .alert-warning {
-            background: #fffbeb;
-            color: #92400e;
-            border: 1px solid #fde68a;
+        /* ===== Stats Cards ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
-        .alert-info {
+        .stat-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
             background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #bfdbfe;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #3b82f6;
+            font-size: 1.5rem;
+        }
+
+        .stat-info h3 {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-info .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0f172a;
         }
 
         /* ===== Modal ===== */
@@ -935,12 +991,7 @@ if(isset($_GET['edit'])) {
             </div>
             
             <!-- Stats Cards -->
-            <?php if(!empty($products)): 
-                $total_products = count($products);
-                $total_stock = array_sum(array_column($products, 'stock'));
-                $active_products = count(array_filter($products, fn($p) => $p['status'] == 'active'));
-                $total_value = array_sum(array_map(fn($p) => $p['price'] * $p['stock'], $products));
-            ?>
+            <?php if($total_products > 0): ?>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon">
@@ -1051,13 +1102,17 @@ if(isset($_GET['edit'])) {
                                     <td>#<?php echo $product['id']; ?></td>
                                     <td>
                                         <div class="product-thumb">
-                                            <img src="<?php echo showImage($product['image'], 'products', 'default-product.jpg'); ?>" 
-                                                 alt="<?php echo htmlspecialchars($product['name']); ?>">
+                                            <?php 
+                                            $image_url = !empty($product['image']) ? "uploads/products/" . $product['image'] : "https://via.placeholder.com/60x60?text=No+Image";
+                                            ?>
+                                            <img src="<?php echo $image_url; ?>" 
+                                                 alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                                 onerror="this.src='https://via.placeholder.com/60x60?text=Error'">
                                         </div>
                                     </td>
                                     <td>
                                         <strong><?php echo htmlspecialchars($product['name']); ?></strong>
-                                        <?php if($product['original_price']): ?>
+                                        <?php if(!empty($product['original_price']) && $product['original_price'] > $product['price']): ?>
                                             <br><small style="color: #94a3b8;">เดิม ฿<?php echo number_format($product['original_price']); ?></small>
                                         <?php endif; ?>
                                     </td>
@@ -1099,15 +1154,15 @@ if(isset($_GET['edit'])) {
                 <span class="close" onclick="closeModal('addModal')">&times;</span>
             </div>
             
-            <form method="POST" enctype="multipart/form-data" onsubmit="return validateAddForm()">
+            <form method="POST" enctype="multipart/form-data">
                 <div class="form-row">
                     <div class="form-group">
                         <label>ชื่อสินค้า <span style="color: #ef4444;">*</span></label>
-                        <input type="text" name="name" id="add_name" required>
+                        <input type="text" name="name" required>
                     </div>
                     <div class="form-group">
                         <label>ราคา (บาท) <span style="color: #ef4444;">*</span></label>
-                        <input type="number" name="price" id="add_price" min="0" step="0.01" required>
+                        <input type="number" name="price" min="0" step="0.01" required>
                     </div>
                 </div>
                 
@@ -1118,7 +1173,7 @@ if(isset($_GET['edit'])) {
                     </div>
                     <div class="form-group">
                         <label>จำนวนคงเหลือ <span style="color: #ef4444;">*</span></label>
-                        <input type="number" name="stock" id="add_stock" min="0" value="0" required>
+                        <input type="number" name="stock" min="0" value="0" required>
                     </div>
                 </div>
                 
@@ -1154,7 +1209,7 @@ if(isset($_GET['edit'])) {
                 
                 <div class="form-group">
                     <label>รูปภาพสินค้า</label>
-                    <input type="file" name="image" id="add_image" accept="image/*" onchange="previewImage(this, 'add_preview')">
+                    <input type="file" name="image" accept="image/*" onchange="previewImage(this, 'add_preview')">
                     <div class="image-preview" id="add_preview">
                         <i class="fas fa-image"></i>
                     </div>
@@ -1193,7 +1248,7 @@ if(isset($_GET['edit'])) {
                 <a href="admin_products.php" class="close">&times;</a>
             </div>
             
-            <form method="POST" enctype="multipart/form-data" onsubmit="return validateEditForm()">
+            <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="product_id" value="<?php echo $edit_product['id']; ?>">
                 
                 <div class="form-row">
@@ -1251,12 +1306,17 @@ if(isset($_GET['edit'])) {
                 <div class="form-group">
                     <label>รูปภาพปัจจุบัน</label>
                     <div class="image-preview" style="margin-bottom: 1rem;">
-                        <img src="<?php echo showImage($edit_product['image'], 'products', 'default-product.jpg'); ?>" 
-                             alt="current" style="width: 100%; height: 100%; object-fit: cover;">
+                        <?php 
+                        $current_image = !empty($edit_product['image']) ? "uploads/products/" . $edit_product['image'] : "https://via.placeholder.com/150x150?text=No+Image";
+                        ?>
+                        <img src="<?php echo $current_image; ?>" 
+                             alt="current" 
+                             style="width: 100%; height: 100%; object-fit: cover;"
+                             onerror="this.src='https://via.placeholder.com/150x150?text=Error'">
                     </div>
                     
                     <label>เปลี่ยนรูปภาพใหม่ (เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน)</label>
-                    <input type="file" name="image" id="edit_image" accept="image/*" onchange="previewImage(this, 'edit_preview')">
+                    <input type="file" name="image" accept="image/*" onchange="previewImage(this, 'edit_preview')">
                     <div class="image-preview" id="edit_preview">
                         <i class="fas fa-image"></i>
                     </div>
