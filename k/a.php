@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ปุ่มแสดงรูป</title>
+<title>ฐิติพล มหานาม (บอส) </title>
 </head>
 <body>
-
+<h1> งาน k ฐิติพล มหานาม (บอส) <br>66010914140 </h1>
 <button onclick="showImage('1.jpg', this)" 
         style="background-color:green; color:white; padding:10px; border:none;">
     เปิดรูปที่ 1
