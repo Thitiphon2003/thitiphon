@@ -101,6 +101,11 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             color: white;
             text-decoration: none;
             font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            color: #ffd700;
         }
         
         .nav-icons {
@@ -186,17 +191,19 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             margin: 2rem auto;
             padding: 0 20px;
             display: grid;
-            grid-template-columns: 250px 1fr;
+            grid-template-columns: 280px 1fr;
             gap: 2rem;
         }
         
         /* Sidebar */
         .category-sidebar {
             background: white;
-            border-radius: 10px;
+            border-radius: 15px;
             padding: 1.5rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
             height: fit-content;
+            position: sticky;
+            top: 100px;
         }
         
         .sidebar-title {
@@ -205,6 +212,13 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             margin-bottom: 1rem;
             padding-bottom: 0.5rem;
             border-bottom: 2px solid #f0f3ff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .sidebar-title i {
+            color: #667eea;
         }
         
         .category-list {
@@ -219,10 +233,10 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.8rem;
+            padding: 0.8rem 1rem;
             color: #555;
             text-decoration: none;
-            border-radius: 5px;
+            border-radius: 8px;
             transition: all 0.3s;
         }
         
@@ -239,9 +253,10 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         .category-count {
             background: #e1e5e9;
             color: #666;
-            padding: 0.2rem 0.5rem;
-            border-radius: 3px;
-            font-size: 0.8rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
         }
         
         .category-link.active .category-count {
@@ -252,9 +267,9 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         /* Main Content */
         .category-content {
             background: white;
-            border-radius: 10px;
+            border-radius: 15px;
             padding: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
         }
         
         /* Breadcrumb */
@@ -273,6 +288,11 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             text-decoration: underline;
         }
         
+        .breadcrumb i {
+            margin: 0 0.5rem;
+            font-size: 0.8rem;
+        }
+        
         /* Header */
         .category-header {
             margin-bottom: 2rem;
@@ -281,7 +301,7 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         }
         
         .category-header h1 {
-            font-size: 1.8rem;
+            font-size: 2rem;
             color: #333;
             margin-bottom: 0.5rem;
         }
@@ -299,7 +319,7 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             margin-bottom: 2rem;
             padding: 1rem;
             background: #f8f9fa;
-            border-radius: 8px;
+            border-radius: 10px;
         }
         
         .filter-group {
@@ -310,29 +330,31 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         
         .filter-group label {
             color: #666;
+            font-weight: 500;
         }
         
         .filter-group select {
-            padding: 0.5rem;
+            padding: 0.5rem 1rem;
             border: 2px solid #e1e5e9;
             border-radius: 5px;
             font-family: inherit;
+            cursor: pointer;
         }
         
         /* Products Grid */
         .products-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
         
         .product-card {
             background: white;
-            border-radius: 8px;
+            border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s;
             border: 1px solid #f0f3ff;
             text-decoration: none;
             color: inherit;
@@ -341,11 +363,11 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         
         .product-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(102,126,234,0.2);
+            box-shadow: 0 10px 25px rgba(102,126,234,0.2);
         }
         
         .product-image {
-            height: 180px;
+            height: 200px;
             overflow: hidden;
             position: relative;
             background: #f8f9fa;
@@ -368,20 +390,27 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             left: 10px;
             background: #ff4444;
             color: white;
-            padding: 0.2rem 0.5rem;
+            padding: 0.3rem 0.6rem;
             border-radius: 3px;
             font-size: 0.8rem;
+            font-weight: 600;
+            z-index: 1;
         }
         
         .product-info {
-            padding: 1rem;
+            padding: 1.2rem;
         }
         
         .product-info h3 {
             font-size: 1rem;
-            margin-bottom: 0.3rem;
+            margin-bottom: 0.5rem;
             color: #333;
             line-height: 1.4;
+            height: 2.8rem;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
         }
         
         .product-category {
@@ -395,13 +424,13 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         }
         
         .current-price {
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1.2rem;
+            font-weight: 700;
             color: #667eea;
         }
         
         .old-price {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             color: #999;
             text-decoration: line-through;
             margin-left: 0.5rem;
@@ -415,7 +444,7 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 3rem;
+            padding: 4rem 2rem;
             background: #f8f9fa;
             border-radius: 10px;
         }
@@ -430,6 +459,7 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         .empty-state h3 {
             color: #333;
             margin-bottom: 0.5rem;
+            font-size: 1.3rem;
         }
         
         .empty-state p {
@@ -444,6 +474,12 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             color: white;
             text-decoration: none;
             border-radius: 5px;
+            transition: all 0.3s;
+        }
+        
+        .btn-shop:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.3);
         }
         
         /* Pagination */
@@ -460,6 +496,11 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             background: white;
             border-radius: 5px;
             cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .page-btn:hover {
+            background: #f8f9fa;
         }
         
         .page-btn.active {
@@ -476,20 +517,44 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
             margin-top: 3rem;
         }
         
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
         .footer-bottom {
             text-align: center;
             padding-top: 2rem;
             border-top: 1px solid #4a5568;
+            color: #cbd5e0;
         }
         
-        @media (max-width: 768px) {
+        /* Responsive */
+        @media (max-width: 992px) {
             .category-container {
                 grid-template-columns: 1fr;
             }
             
+            .category-sidebar {
+                position: static;
+            }
+        }
+        
+        @media (max-width: 768px) {
             .category-filters {
                 flex-direction: column;
                 gap: 1rem;
+            }
+            
+            .products-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .products-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -538,15 +603,17 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
     <div class="category-container">
         <!-- Sidebar -->
         <div class="category-sidebar">
-            <h3 class="sidebar-title">หมวดหมู่ทั้งหมด</h3>
+            <h3 class="sidebar-title">
+                <i class="fas fa-th-large"></i> หมวดหมู่ทั้งหมด
+            </h3>
             <ul class="category-list">
+                <?php
+                $total_products = fetchOne("SELECT COUNT(*) as count FROM products WHERE status = 'active'")['count'] ?? 0;
+                $is_all_active = ($category_id == 0 && empty($category_name) && empty($search)) ? 'active' : '';
+                ?>
                 <li class="category-item">
-                    <?php
-                    $total_products = fetchOne("SELECT COUNT(*) as count FROM products WHERE status = 'active'")['count'] ?? 0;
-                    $is_all_active = ($category_id == 0 && empty($category_name) && empty($search)) ? 'active' : '';
-                    ?>
                     <a href="category.php" class="category-link <?php echo $is_all_active; ?>">
-                        <span>สินค้าทั้งหมด</span>
+                        <span><i class="fas fa-box"></i> สินค้าทั้งหมด</span>
                         <span class="category-count"><?php echo $total_products; ?></span>
                     </a>
                 </li>
@@ -571,32 +638,49 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
         <div class="category-content">
             <!-- Breadcrumb -->
             <div class="breadcrumb">
-                <a href="index.php">หน้าแรก</a> > 
+                <a href="index.php">หน้าแรก</a>
+                <i class="fas fa-chevron-right"></i>
                 <?php if(!empty($search)): ?>
-                    <a href="category.php">สินค้า</a> > ค้นหา
+                    <a href="category.php">สินค้า</a>
+                    <i class="fas fa-chevron-right"></i>
+                    <span>ค้นหา "<?php echo htmlspecialchars($search); ?>"</span>
                 <?php else: ?>
-                    <a href="category.php">สินค้า</a> > <?php echo htmlspecialchars($page_title); ?>
+                    <a href="category.php">สินค้า</a>
+                    <?php if($category_id > 0 || !empty($category_name)): ?>
+                        <i class="fas fa-chevron-right"></i>
+                        <span><?php echo htmlspecialchars($page_title); ?></span>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
             
             <!-- Header -->
             <div class="category-header">
-                <h1><?php echo htmlspecialchars($page_title); ?></h1>
+                <h1>
+                    <?php if(!empty($search)): ?>
+                        <i class="fas fa-search"></i> 
+                    <?php elseif($category_id > 0 || !empty($category_name)): ?>
+                        <i class="fas fa-folder"></i> 
+                    <?php else: ?>
+                        <i class="fas fa-box"></i> 
+                    <?php endif; ?>
+                    <?php echo htmlspecialchars($page_title); ?>
+                </h1>
                 <span class="product-count">พบ <?php echo count($products); ?> รายการ</span>
             </div>
             
             <!-- Filters -->
             <div class="category-filters">
                 <div class="filter-group">
-                    <label>เรียงตาม:</label>
+                    <label><i class="fas fa-sort"></i> เรียงตาม:</label>
                     <select onchange="sortProducts(this.value)">
                         <option value="newest">มาใหม่ล่าสุด</option>
                         <option value="price-low">ราคาต่ำไปสูง</option>
                         <option value="price-high">ราคาสูงไปต่ำ</option>
+                        <option value="popular">ยอดนิยม</option>
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label>แสดง:</label>
+                    <label><i class="fas fa-eye"></i> แสดง:</label>
                     <select onchange="showPerPage(this.value)">
                         <option value="12">12 ชิ้น</option>
                         <option value="24">24 ชิ้น</option>
@@ -618,7 +702,8 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
                     ?>
                         <a href="product_detail.php?id=<?php echo $product['id']; ?>" class="product-card">
                             <div class="product-image">
-                                <img src="https://via.placeholder.com/300x300" alt="<?php echo htmlspecialchars($product['name']); ?>">
+                                <img src="<?php echo showImage($product['image'], 'products', 'default-product.jpg'); ?>" 
+                                     alt="<?php echo htmlspecialchars($product['name']); ?>">
                                 <?php if($product['original_price'] && $product['original_price'] > $product['price']): ?>
                                     <?php $discount = round((($product['original_price'] - $product['price']) / $product['original_price']) * 100); ?>
                                     <span class="discount-badge">-<?php echo $discount; ?>%</span>
@@ -627,7 +712,9 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
                             <div class="product-info">
                                 <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                                 <?php if($cat_name): ?>
-                                    <div class="product-category"><?php echo htmlspecialchars($cat_name); ?></div>
+                                    <div class="product-category">
+                                        <i class="fas fa-folder"></i> <?php echo htmlspecialchars($cat_name); ?>
+                                    </div>
                                 <?php endif; ?>
                                 <div class="product-price">
                                     <span class="current-price">฿<?php echo number_format($product['price']); ?></span>
@@ -635,7 +722,9 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
                                         <span class="old-price">฿<?php echo number_format($product['original_price']); ?></span>
                                     <?php endif; ?>
                                 </div>
-                                <div class="product-stock">คงเหลือ <?php echo $product['stock']; ?> ชิ้น</div>
+                                <div class="product-stock">
+                                    <i class="fas fa-box"></i> คงเหลือ <?php echo $product['stock']; ?> ชิ้น
+                                </div>
                             </div>
                         </a>
                     <?php endforeach; ?>
@@ -648,6 +737,7 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
                     <button class="page-btn">3</button>
                     <button class="page-btn">4</button>
                     <button class="page-btn">5</button>
+                    <button class="page-btn"><i class="fas fa-chevron-right"></i></button>
                 </div>
             <?php else: ?>
                 <!-- Empty State -->
@@ -655,7 +745,9 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
                     <i class="fas fa-box-open"></i>
                     <h3>ไม่พบสินค้า</h3>
                     <p>กรุณาลองค้นหาหรือเลือกหมวดหมู่อื่น</p>
-                    <a href="category.php" class="btn-shop">ดูสินค้าทั้งหมด</a>
+                    <a href="category.php" class="btn-shop">
+                        <i class="fas fa-store"></i> ดูสินค้าทั้งหมด
+                    </a>
                 </div>
             <?php endif; ?>
         </div>
@@ -672,12 +764,13 @@ $all_categories = fetchAll("SELECT * FROM categories WHERE status = 'active' ORD
 
     <script>
         function sortProducts(value) {
-            // Implement sorting logic
             console.log('Sort by:', value);
+            // สามารถเพิ่มฟังก์ชันเรียงลำดับได้
         }
         
         function showPerPage(value) {
             console.log('Show per page:', value);
+            // สามารถเพิ่มฟังก์ชันแสดงจำนวนต่อหน้าได้
         }
     </script>
 </body>

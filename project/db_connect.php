@@ -48,30 +48,21 @@ try {
         return query($sql, $params)->rowCount();
     }
     function uploadImage($file, $folder = 'products', $max_size = 5) {
+        $target_dir = "uploads/$folder/";
+        
         // สร้างโฟลเดอร์ถ้ายังไม่มี
-        $upload_dir = "uploads/$folder/";
-        if (!file_exists($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
+        if(!file_exists($target_dir)) {
+            mkdir($target_dir, 0777, true);
         }
         
-        // ตรวจสอบข้อผิดพลาด
-        if ($file['error'] != UPLOAD_ERR_OK) {
-            $error_messages = [
-                UPLOAD_ERR_INI_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป (จำกัดโดย server)',
-                UPLOAD_ERR_FORM_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป',
-                UPLOAD_ERR_PARTIAL => 'อัปโหลดไฟล์ได้เพียงบางส่วน',
-                UPLOAD_ERR_NO_FILE => 'ไม่ได้เลือกไฟล์',
-                UPLOAD_ERR_NO_TMP_DIR => 'ไม่มีโฟลเดอร์ชั่วคราว',
-                UPLOAD_ERR_CANT_WRITE => 'ไม่สามารถเขียนไฟล์ลงดิสก์ได้',
-                UPLOAD_ERR_EXTENSION => 'ส่วนขยาย PHP หยุดการอัปโหลด'
-            ];
-            $error_msg = $error_messages[$file['error']] ?? 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ';
-            return ['success' => false, 'message' => $error_msg];
+        // ตรวจสอบไฟล์
+        if($file['error'] != UPLOAD_ERR_OK) {
+            return ['success' => false, 'message' => 'เกิดข้อผิดพลาดในการอัปโหลด'];
         }
         
-        // ตรวจสอบขนาดไฟล์
-        if ($file['size'] > $max_size * 1024 * 1024) {
-            return ['success' => false, 'message' => "ไฟล์ต้องมีขนาดไม่เกิน $max_size MB"];
+        // ตรวจสอบขนาดไฟล์ (default 5MB)
+        if($file['size'] > $max_size * 1024 * 1024) {
+            return ['success' => false, 'message' => "ไฟล์ต้องไม่เกิน $max_size MB"];
         }
         
         // ตรวจสอบประเภทไฟล์
@@ -80,75 +71,45 @@ try {
         $mime_type = finfo_file($finfo, $file['tmp_name']);
         finfo_close($finfo);
         
-        if (!in_array($mime_type, $allowed_types)) {
-            return ['success' => false, 'message' => 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, GIF, WEBP เท่านั้น'];
+        if(!in_array($mime_type, $allowed_types)) {
+            return ['success' => false, 'message' => 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, GIF, WEBP'];
         }
         
-        // ตรวจสอบนามสกุลไฟล์
-        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        $allowed_ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (!in_array($extension, $allowed_ext)) {
-            return ['success' => false, 'message' => 'นามสกุลไฟล์ไม่ถูกต้อง'];
-        }
-        
-        // สร้างชื่อไฟล์ใหม่เพื่อป้องกันชื่อซ้ำ
+        // สร้างชื่อไฟล์ใหม่
+        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
         $new_filename = uniqid() . '_' . time() . '.' . $extension;
-        $target_path = $upload_dir . $new_filename;
+        $target_file = $target_dir . $new_filename;
         
-        // ย้ายไฟล์
-        if (move_uploaded_file($file['tmp_name'], $target_path)) {
-            // ตั้งสิทธิ์ให้ไฟล์
-            chmod($target_path, 0644);
-            
+        // อัปโหลดไฟล์
+        if(move_uploaded_file($file['tmp_name'], $target_file)) {
             return [
                 'success' => true,
                 'filename' => $new_filename,
-                'path' => $target_path,
-                'message' => 'อัปโหลดไฟล์สำเร็จ'
+                'path' => $target_file,
+                'url' => $target_file
             ];
         } else {
-            return ['success' => false, 'message' => 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้'];
+            return ['success' => false, 'message' => 'ไม่สามารถอัปโหลดไฟล์ได้'];
         }
     }
     
-    /**
-     * ลบรูปภาพ
-     * @param string $filename ชื่อไฟล์
-     * @param string $folder ชื่อโฟลเดอร์
-     * @return bool
-     */
+    // ฟังก์ชันลบรูปภาพ
     function deleteImage($filename, $folder = 'products') {
-        if (empty($filename)) {
-            return true;
-        }
+        if(empty($filename)) return true;
         
-        $file_path = "uploads/$folder/$filename";
-        if (file_exists($file_path)) {
-            return unlink($file_path);
+        $filepath = "uploads/$folder/$filename";
+        if(file_exists($filepath)) {
+            return unlink($filepath);
         }
         return true;
     }
     
-    /**
-     * แสดงรูปภาพ (พร้อม fallback)
-     * @param string $filename ชื่อไฟล์
-     * @param string $folder ชื่อโฟลเดอร์
-     * @param string $default ชื่อไฟล์เริ่มต้น
-     * @return string URL ของรูปภาพ
-     */
+    // ฟังก์ชันแสดงรูปภาพ (พร้อม fallback)
     function showImage($filename, $folder = 'products', $default = 'default.jpg') {
-        // ถ้ามีชื่อไฟล์และไฟล์มีอยู่จริง
-        if (!empty($filename) && file_exists("uploads/$folder/$filename")) {
+        if(!empty($filename) && file_exists("uploads/$folder/$filename")) {
             return "uploads/$folder/$filename";
         }
-        
-        // ถ้ามีรูปเริ่มต้น
-        if (file_exists("uploads/$folder/$default")) {
-            return "uploads/$folder/$default";
-        }
-        
-        // ใช้ placeholder
-        return "https://via.placeholder.com/300x300?text=No+Image";
+        return "uploads/$folder/$default";
     }
     
 } catch(PDOException $e) {

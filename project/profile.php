@@ -40,15 +40,37 @@ $total_spent = $order_stats['total_spent'] ?? 0;
 $success_message = '';
 $error_message = '';
 
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
-    $firstname = trim($_POST['firstname'] ?? '');
-    $lastname = trim($_POST['lastname'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
+if($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // อัปเดตรูปโปรไฟล์
+    if(isset($_POST['update_avatar'])) {
+        if(isset($_FILES['avatar']) && $_FILES['avatar']['error'] == UPLOAD_ERR_OK) {
+            $upload = uploadImage($_FILES['avatar'], 'profiles', 2); // ขนาดไม่เกิน 2MB
+            
+            if($upload['success']) {
+                // ลบรูปเก่า
+                if(!empty($user['avatar'])) {
+                    deleteImage($user['avatar'], 'profiles');
+                }
+                
+                // อัปเดตรูปใหม่
+                query("UPDATE users SET avatar = ? WHERE id = ?", [$upload['filename'], $user_id]);
+                $user['avatar'] = $upload['filename'];
+                $success_message = 'อัปเดตรูปโปรไฟล์เรียบร้อย';
+            } else {
+                $error_message = $upload['message'];
+            }
+        }
+    }
     
-    if(empty($firstname) || empty($lastname)) {
-        $error_message = 'กรุณากรอกชื่อและนามสกุล';
-    } else {
-        try {
+    // อัปเดตข้อมูลส่วนตัว
+    if(isset($_POST['update_profile'])) {
+        $firstname = trim($_POST['firstname'] ?? '');
+        $lastname = trim($_POST['lastname'] ?? '');
+        $phone = trim($_POST['phone'] ?? '');
+        
+        if(empty($firstname) || empty($lastname)) {
+            $error_message = 'กรุณากรอกชื่อและนามสกุล';
+        } else {
             $update_sql = "UPDATE users SET firstname = ?, lastname = ?, phone = ? WHERE id = ?";
             query($update_sql, [$firstname, $lastname, $phone, $user_id]);
             
@@ -64,8 +86,6 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             $user['phone'] = $phone;
             
             $success_message = 'อัปเดตโปรไฟล์เรียบร้อยแล้ว';
-        } catch(Exception $e) {
-            $error_message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
         }
     }
 }
@@ -86,6 +106,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
+        /* Navbar */
         .navbar {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -93,6 +114,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             position: sticky;
             top: 0;
             z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
         .nav-container {
@@ -129,10 +151,32 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             font-weight: 500;
         }
         
+        .nav-links a:hover {
+            color: #ffd700;
+        }
+        
         .nav-icons {
             display: flex;
             align-items: center;
             gap: 1rem;
+        }
+        
+        .cart-icon {
+            color: white;
+            text-decoration: none;
+            font-size: 1.2rem;
+            position: relative;
+        }
+        
+        .cart-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ff4444;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 0.7rem;
         }
         
         .user-dropdown {
@@ -171,6 +215,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             display: block;
         }
         
+        /* Profile Container */
         .profile-container {
             max-width: 1000px;
             margin: 2rem auto;
@@ -180,31 +225,58 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             gap: 2rem;
         }
         
+        /* Sidebar */
         .profile-sidebar {
             background: white;
             border-radius: 15px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.05);
             overflow: hidden;
+            height: fit-content;
         }
         
         .profile-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 2rem;
+            padding: 2rem 1.5rem;
             text-align: center;
         }
         
         .profile-avatar {
-            width: 100px;
-            height: 100px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 50%;
+            position: relative;
+            width: 120px;
+            height: 120px;
             margin: 0 auto 1rem;
+        }
+        
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 4px solid rgba(255,255,255,0.3);
+            object-fit: cover;
+            background: white;
+        }
+        
+        .change-avatar {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 36px;
+            height: 36px;
+            background: #ffd700;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 3rem;
-            border: 4px solid rgba(255,255,255,0.3);
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid white;
+        }
+        
+        .change-avatar:hover {
+            transform: scale(1.1);
+            background: #ffed4a;
         }
         
         .profile-name {
@@ -225,6 +297,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             background: rgba(255,255,255,0.2);
             border-radius: 20px;
             font-size: 0.8rem;
+            font-weight: 500;
         }
         
         .profile-stats {
@@ -244,6 +317,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             font-size: 1.5rem;
             font-weight: 700;
             color: #667eea;
+            line-height: 1.2;
         }
         
         .stat-label {
@@ -261,7 +335,9 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             padding: 1rem 1.5rem;
             color: #555;
             text-decoration: none;
+            transition: all 0.3s;
             gap: 1rem;
+            border-left: 4px solid transparent;
         }
         
         .profile-nav-item i {
@@ -271,14 +347,17 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
         
         .profile-nav-item:hover {
             background: #f8f9fa;
+            border-left-color: #667eea;
         }
         
         .profile-nav-item.active {
             background: #f0f3ff;
+            border-left-color: #667eea;
             color: #667eea;
-            border-left: 4px solid #667eea;
+            font-weight: 500;
         }
         
+        /* Main Content */
         .profile-content {
             background: white;
             border-radius: 15px;
@@ -315,6 +394,12 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             border-radius: 8px;
             cursor: pointer;
             font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+        
+        .btn-edit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.3);
         }
         
         .btn-save {
@@ -396,11 +481,13 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             border: 2px solid #e1e5e9;
             border-radius: 8px;
             font-size: 1rem;
+            transition: all 0.3s;
         }
         
         .form-group input:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
         }
         
         .form-actions {
@@ -414,6 +501,21 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             padding: 1rem;
             border-radius: 8px;
             margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .alert.success {
@@ -426,6 +528,10 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+        
+        .avatar-upload-form {
+            display: inline;
         }
         
         @media (max-width: 768px) {
@@ -449,11 +555,15 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             <div class="nav-menu">
                 <ul class="nav-links">
                     <li><a href="index.php">หน้าแรก</a></li>
-                    <li><a href="index.php#categories">หมวดหมู่</a></li>
-                    <li><a href="index.php#products">สินค้าทั้งหมด</a></li>
+                    <li><a href="category.php">หมวดหมู่</a></li>
+                    <li><a href="category.php">สินค้าทั้งหมด</a></li>
                     <li><a href="#contact">ติดต่อเรา</a></li>
                 </ul>
                 <div class="nav-icons">
+                    <a href="cart.php" class="cart-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-count">0</span>
+                    </a>
                     <div class="user-dropdown">
                         <a href="#" class="user-icon">
                             <i class="fas fa-user-circle"></i>
@@ -476,7 +586,14 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
         <div class="profile-sidebar">
             <div class="profile-header">
                 <div class="profile-avatar">
-                    <i class="fas fa-user-circle"></i>
+                    <img src="<?php echo showImage($user['avatar'], 'profiles', 'default-avatar.png'); ?>" alt="avatar">
+                    <form method="POST" enctype="multipart/form-data" class="avatar-upload-form" id="avatarForm">
+                        <label for="avatarUpload" class="change-avatar">
+                            <i class="fas fa-camera"></i>
+                        </label>
+                        <input type="file" id="avatarUpload" name="avatar" accept="image/*" style="display: none;" onchange="document.getElementById('avatarForm').submit()">
+                        <input type="hidden" name="update_avatar" value="1">
+                    </form>
                 </div>
                 <div class="profile-name"><?php echo $user['firstname'] . ' ' . $user['lastname']; ?></div>
                 <div class="profile-email"><?php echo $user['email']; ?></div>
@@ -626,6 +743,13 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
             document.getElementById('editMode').classList.remove('active');
             document.getElementById('editBtn').style.display = 'block';
         }
+        
+        // แสดงตัวอย่างรูปก่อนอัปโหลด (สำหรับ avatar)
+        document.getElementById('avatarUpload')?.addEventListener('change', function(e) {
+            if(e.target.files && e.target.files[0]) {
+                // รอให้ form submit อัตโนมัติ
+            }
+        });
     </script>
 </body>
 </html>
