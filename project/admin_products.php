@@ -278,6 +278,14 @@ if(isset($_GET['edit'])) {
         exit();
     }
 }
+
+// ฟังก์ชันแสดงรูปภาพ (ใช้ในหน้านี้โดยเฉพาะ)
+function getProductImage($filename) {
+    if(!empty($filename) && file_exists("uploads/products/" . $filename)) {
+        return "uploads/products/" . $filename;
+    }
+    return "https://via.placeholder.com/300x300?text=No+Image";
+}
 ?>
 
 <!DOCTYPE html>
@@ -1030,12 +1038,14 @@ if(isset($_GET['edit'])) {
                                     <td>
                                         <div class="product-thumb">
                                             <?php 
-                                            // ใช้ฟังก์ชัน showImage เพื่อแสดงรูป
-                                            $image_url = showImage($product['image'], 'products', 'default.jpg');
+                                            // ใช้รูปจากโฟลเดอร์ uploads/products/
+                                            $image_path = "uploads/products/" . $product['image'];
+                                            if(!empty($product['image']) && file_exists($image_path)) {
+                                                echo '<img src="' . $image_path . '" alt="' . htmlspecialchars($product['name']) . '">';
+                                            } else {
+                                                echo '<img src="https://via.placeholder.com/60x60/e2e8f0/64748b?text=No+Image" alt="No Image">';
+                                            }
                                             ?>
-                                            <img src="<?php echo $image_url; ?>" 
-                                                 alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                                 onerror="this.src='https://via.placeholder.com/60x60/ef4444/ffffff?text=Error'">
                                         </div>
                                     </td>
                                     <td>
@@ -1235,12 +1245,13 @@ if(isset($_GET['edit'])) {
                     <label>รูปภาพปัจจุบัน</label>
                     <div class="image-preview" style="margin-bottom: 1rem;">
                         <?php 
-                        $current_image = showImage($edit_product['image'], 'products', 'default.jpg');
+                        $current_image_path = "uploads/products/" . $edit_product['image'];
+                        if(!empty($edit_product['image']) && file_exists($current_image_path)) {
+                            echo '<img src="' . $current_image_path . '" alt="current" style="width: 100%; height: 100%; object-fit: cover;">';
+                        } else {
+                            echo '<img src="https://via.placeholder.com/150x150/e2e8f0/64748b?text=No+Image" alt="No Image">';
+                        }
                         ?>
-                        <img src="<?php echo $current_image; ?>" 
-                             alt="current" 
-                             style="width: 100%; height: 100%; object-fit: cover;"
-                             onerror="this.src='https://via.placeholder.com/150x150/ef4444/ffffff?text=Error'">
                     </div>
                     
                     <label>เปลี่ยนรูปภาพใหม่ (เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน)</label>
