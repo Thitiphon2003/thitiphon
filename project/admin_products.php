@@ -30,27 +30,18 @@ if(isset($_GET['delete'])) {
         // เริ่ม transaction
         $pdo->beginTransaction();
         
-        // ดึงข้อมูลรูปภาพก่อนลบ
-        $product = fetchOne("SELECT image FROM products WHERE id = ?", [$product_id]);
-        
-        if($product) {
-            // ลบรูปภาพถ้ามี
-            if(!empty($product['image'])) {
-                $image_path = "uploads/products/" . $product['image'];
-                if(file_exists($image_path)) {
-                    unlink($image_path);
-                }
-            }
-            
-            // ลบข้อมูลสินค้า
-            $sql = "DELETE FROM products WHERE id = ?";
-            query($sql, [$product_id]);
-            
-            $pdo->commit();
-            $_SESSION['success'] = 'ลบสินค้าเรียบร้อยแล้ว';
-        } else {
-            throw new Exception('ไม่พบสินค้าที่ต้องการลบ');
+        // ลบรูปภาพ (ถ้ามี)
+        $image_path = "uploads/products/" . $product_id . ".jpg";
+        if(file_exists($image_path)) {
+            unlink($image_path);
         }
+        
+        // ลบข้อมูลสินค้า
+        $sql = "DELETE FROM products WHERE id = ?";
+        query($sql, [$product_id]);
+        
+        $pdo->commit();
+        $_SESSION['success'] = 'ลบสินค้าเรียบร้อยแล้ว';
     } catch(Exception $e) {
         $pdo->rollBack();
         $_SESSION['error'] = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
@@ -81,25 +72,13 @@ if(isset($_POST['add_product'])) {
         if($price <= 0) $errors[] = 'กรุณากรอกราคาที่ถูกต้อง';
         if($stock < 0) $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
         
-        // จัดการอัปโหลดรูปภาพ
-        $image_filename = '';
-        if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
-            $upload_result = uploadImage($_FILES['image'], 'products');
-            if($upload_result['success']) {
-                $image_filename = $upload_result['filename'];
-            } else {
-                $errors[] = 'อัปโหลดรูปไม่สำเร็จ: ' . $upload_result['message'];
-            }
-        }
-        
-        // ถ้าไม่มีข้อผิดพลาด ให้บันทึกข้อมูล
         if(empty($errors)) {
-            $sql = "INSERT INTO products (name, image, description, price, original_price, stock, category_id, seller_id, status, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            // บันทึกข้อมูลสินค้าก่อนเพื่อให้ได้ ID
+            $sql = "INSERT INTO products (name, description, price, original_price, stock, category_id, seller_id, status, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
             
             query($sql, [
                 $name,
-                $image_filename,
                 $description,
                 $price,
                 $original_price,
@@ -109,10 +88,24 @@ if(isset($_POST['add_product'])) {
                 $status
             ]);
             
-            $_SESSION['success'] = 'เพิ่มสินค้า "' . $name . '" เรียบร้อยแล้ว' . ($image_filename ? ' (พร้อมรูปภาพ)' : '');
-            header('Location: admin_products.php');
-            exit();
-        } else {
+            $new_product_id = $pdo->lastInsertId();
+            
+            // จัดการอัปโหลดรูปภาพ (ใช้ ID เป็นชื่อไฟล์)
+            if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
+                $upload_result = uploadProductImage($_FILES['image'], $new_product_id);
+                if(!$upload_result['success']) {
+                    $errors[] = 'อัปโหลดรูปไม่สำเร็จ: ' . $upload_result['message'];
+                }
+            }
+            
+            if(empty($errors)) {
+                $_SESSION['success'] = 'เพิ่มสินค้า "' . $name . '" เรียบร้อยแล้ว (ID: ' . $new_product_id . ')';
+                header('Location: admin_products.php');
+                exit();
+            }
+        }
+        
+        if(!empty($errors)) {
             $error_message = implode('<br>', $errors);
         }
         
@@ -144,27 +137,16 @@ if(isset($_POST['edit_product'])) {
         if($price <= 0) $errors[] = 'กรุณากรอกราคาที่ถูกต้อง';
         if($stock < 0) $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
         
-        // ดึงข้อมูลสินค้าเก่า
+        // ตรวจสอบว่าสินค้ามีอยู่จริง
         $old_product = fetchOne("SELECT * FROM products WHERE id = ?", [$product_id]);
         if(!$old_product) {
             throw new Exception('ไม่พบสินค้าที่ต้องการแก้ไข');
         }
         
-        $image_filename = $old_product['image'];
-        
-        // จัดการอัปโหลดรูปภาพใหม่
+        // จัดการอัปโหลดรูปภาพใหม่ (ใช้ ID เป็นชื่อไฟล์)
         if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
-            $upload_result = uploadImage($_FILES['image'], 'products');
-            if($upload_result['success']) {
-                // ลบรูปเก่า
-                if(!empty($old_product['image'])) {
-                    $old_image_path = "uploads/products/" . $old_product['image'];
-                    if(file_exists($old_image_path)) {
-                        unlink($old_image_path);
-                    }
-                }
-                $image_filename = $upload_result['filename'];
-            } else {
+            $upload_result = uploadProductImage($_FILES['image'], $product_id);
+            if(!$upload_result['success']) {
                 $errors[] = 'อัปโหลดรูปไม่สำเร็จ: ' . $upload_result['message'];
             }
         }
@@ -173,7 +155,6 @@ if(isset($_POST['edit_product'])) {
         if(empty($errors)) {
             $sql = "UPDATE products SET 
                     name = ?, 
-                    image = ?, 
                     description = ?, 
                     price = ?, 
                     original_price = ?, 
@@ -185,7 +166,6 @@ if(isset($_POST['edit_product'])) {
             
             query($sql, [
                 $name,
-                $image_filename,
                 $description,
                 $price,
                 $original_price,
@@ -205,6 +185,64 @@ if(isset($_POST['edit_product'])) {
         
     } catch(Exception $e) {
         $error_message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+    }
+}
+
+// ============================================
+// ฟังก์ชันอัปโหลดรูปภาพเฉพาะ (ใช้ ID เป็นชื่อไฟล์)
+// ============================================
+function uploadProductImage($file, $product_id) {
+    $upload_dir = "uploads/products/";
+    
+    // สร้างโฟลเดอร์ถ้ายังไม่มี
+    if(!file_exists($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+    }
+    
+    // ตรวจสอบข้อผิดพลาด
+    if($file['error'] != UPLOAD_ERR_OK) {
+        $error_messages = [
+            UPLOAD_ERR_INI_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป (จำกัดโดย server)',
+            UPLOAD_ERR_FORM_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป',
+            UPLOAD_ERR_PARTIAL => 'อัปโหลดไฟล์ได้เพียงบางส่วน',
+            UPLOAD_ERR_NO_FILE => 'ไม่ได้เลือกไฟล์',
+            UPLOAD_ERR_NO_TMP_DIR => 'ไม่มีโฟลเดอร์ชั่วคราว',
+            UPLOAD_ERR_CANT_WRITE => 'ไม่สามารถเขียนไฟล์ลงดิสก์ได้',
+            UPLOAD_ERR_EXTENSION => 'ส่วนขยาย PHP หยุดการอัปโหลด'
+        ];
+        $error_msg = $error_messages[$file['error']] ?? 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+        return ['success' => false, 'message' => $error_msg];
+    }
+    
+    // ตรวจสอบขนาดไฟล์ (ไม่เกิน 5MB)
+    if($file['size'] > 5 * 1024 * 1024) {
+        return ['success' => false, 'message' => 'ไฟล์ต้องมีขนาดไม่เกิน 5 MB'];
+    }
+    
+    // ตรวจสอบประเภทไฟล์
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if(!in_array($mime_type, $allowed_types)) {
+        return ['success' => false, 'message' => 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, GIF, WEBP เท่านั้น'];
+    }
+    
+    // ใช้นามสกุล .jpg เสมอ (เพื่อความง่าย)
+    $target_path = $upload_dir . $product_id . '.jpg';
+    
+    // ลบรูปเก่าถ้ามี
+    if(file_exists($target_path)) {
+        unlink($target_path);
+    }
+    
+    // ย้ายไฟล์
+    if(move_uploaded_file($file['tmp_name'], $target_path)) {
+        chmod($target_path, 0644);
+        return ['success' => true, 'message' => 'อัปโหลดไฟล์สำเร็จ'];
+    } else {
+        return ['success' => false, 'message' => 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้'];
     }
 }
 
@@ -277,14 +315,6 @@ if(isset($_GET['edit'])) {
         header('Location: admin_products.php');
         exit();
     }
-}
-
-// ฟังก์ชันแสดงรูปภาพ (ใช้ในหน้านี้โดยเฉพาะ)
-function getProductImage($filename) {
-    if(!empty($filename) && file_exists("uploads/products/" . $filename)) {
-        return "uploads/products/" . $filename;
-    }
-    return "https://via.placeholder.com/300x300?text=No+Image";
 }
 ?>
 
@@ -1038,10 +1068,9 @@ function getProductImage($filename) {
                                     <td>
                                         <div class="product-thumb">
                                             <?php 
-                                            // ใช้รูปจากโฟลเดอร์ uploads/products/
-                                            $image_path = "uploads/products/" . $product['image'];
-                                            if(!empty($product['image']) && file_exists($image_path)) {
-                                                echo '<img src="' . $image_path . '" alt="' . htmlspecialchars($product['name']) . '">';
+                                            $image_path = "uploads/products/" . $product['id'] . ".jpg";
+                                            if(file_exists($image_path)) {
+                                                echo '<img src="' . $image_path . '?t=' . time() . '" alt="' . htmlspecialchars($product['name']) . '">';
                                             } else {
                                                 echo '<img src="https://via.placeholder.com/60x60/e2e8f0/64748b?text=No+Image" alt="No Image">';
                                             }
@@ -1051,7 +1080,7 @@ function getProductImage($filename) {
                                     <td>
                                         <strong><?php echo htmlspecialchars($product['name']); ?></strong>
                                         <?php if(!empty($product['original_price']) && $product['original_price'] > $product['price']): ?>
-                                            <br><small style="color: #94a3b8;">เดิม ฿<?php echo number_format($product['original_price']); ?></small>
+                                            <br><small style="color: #94a3b8;">เต็ม ฿<?php echo number_format($product['original_price']); ?></small>
                                         <?php endif; ?>
                                     </td>
                                     <td><strong>฿<?php echo number_format($product['price']); ?></strong></td>
@@ -1151,7 +1180,7 @@ function getProductImage($filename) {
                     <div class="image-preview" id="add_preview">
                         <i class="fas fa-image"></i>
                     </div>
-                    <small style="color: #64748b;">ขนาดไม่เกิน 5MB, รองรับ JPG, PNG, GIF, WEBP</small>
+                    <small style="color: #64748b;">ขนาดไม่เกิน 5MB, รองรับ JPG, PNG, GIF, WEBP (ระบบจะบันทึกเป็น [ID].jpg)</small>
                 </div>
                 
                 <div class="form-group">
@@ -1245,9 +1274,9 @@ function getProductImage($filename) {
                     <label>รูปภาพปัจจุบัน</label>
                     <div class="image-preview" style="margin-bottom: 1rem;">
                         <?php 
-                        $current_image_path = "uploads/products/" . $edit_product['image'];
-                        if(!empty($edit_product['image']) && file_exists($current_image_path)) {
-                            echo '<img src="' . $current_image_path . '" alt="current" style="width: 100%; height: 100%; object-fit: cover;">';
+                        $current_image_path = "uploads/products/" . $edit_product['id'] . ".jpg";
+                        if(file_exists($current_image_path)) {
+                            echo '<img src="' . $current_image_path . '?t=' . time() . '" alt="current" style="width: 100%; height: 100%; object-fit: cover;">';
                         } else {
                             echo '<img src="https://via.placeholder.com/150x150/e2e8f0/64748b?text=No+Image" alt="No Image">';
                         }
@@ -1259,6 +1288,7 @@ function getProductImage($filename) {
                     <div class="image-preview" id="edit_preview">
                         <i class="fas fa-image"></i>
                     </div>
+                    <small style="color: #64748b;">ระบบจะบันทึกเป็น <?php echo $edit_product['id']; ?>.jpg</small>
                 </div>
                 
                 <div class="form-group">
