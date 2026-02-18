@@ -1,7 +1,7 @@
 ssh root@103.114.201.254
 zPQBw!PvB!b2
 
-cd /var/www/html/thitiphon/project/uploads
+cd /var/www/html/thitiphon/
 
 git config --global user.name "Thitiphon2003"
 git config --global user.email "66010914140@msu.ac.th"
