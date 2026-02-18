@@ -711,12 +711,27 @@ if(isset($_GET['edit'])) {
                             <?php else: ?>
                                 <?php foreach($products as $product): ?>
                                 <tr>
-                                    <td>
-                                        <div class="product-thumb">
-                                            <img src="<?php echo showImage($product['image'], 'products', 'default-product.jpg'); ?>" 
-                                                 alt="<?php echo htmlspecialchars($product['name']); ?>">
-                                        </div>
-                                    </td>
+                                <td>
+                                    <div class="product-thumb">
+                                        <?php 
+                                        $image_url = showImage($product['image'], 'products', 'default.jpg');
+                                        ?>
+                                        <img src="<?php echo $image_url; ?>" 
+                                            alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                            onerror="this.src='https://via.placeholder.com/60x60/ef4444/ffffff?text=Error'">
+                                    </div>
+                                </td>
+
+                                // ใน Modal แก้ไขสินค้า ส่วนแสดงรูปภาพปัจจุบัน:
+                                <div class="image-preview" style="margin-bottom: 1rem;">
+                                    <?php 
+                                    $current_image = showImage($edit_product['image'], 'products', 'default.jpg');
+                                    ?>
+                                    <img src="<?php echo $current_image; ?>" 
+                                        alt="current" 
+                                        style="width: 100%; height: 100%; object-fit: cover;"
+                                        onerror="this.src='https://via.placeholder.com/150x150/ef4444/ffffff?text=Error'">
+                                </div>
                                     <td><?php echo htmlspecialchars($product['name']); ?></td>
                                     <td>฿<?php echo number_format($product['price']); ?></td>
                                     <td><?php echo $product['stock']; ?></td>
