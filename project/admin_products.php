@@ -65,70 +65,57 @@ if(isset($_GET['delete'])) {
 // ============================================
 if(isset($_POST['add_product'])) {
     try {
-        // ตรวจสอบข้อมูลที่จำเป็น
+        // รับข้อมูลจากฟอร์ม
         $name = trim($_POST['name'] ?? '');
-        $price = filter_var($_POST['price'] ?? 0, FILTER_VALIDATE_FLOAT);
-        $stock = filter_var($_POST['stock'] ?? 0, FILTER_VALIDATE_INT);
+        $price = floatval($_POST['price'] ?? 0);
+        $stock = intval($_POST['stock'] ?? 0);
+        $category_id = !empty($_POST['category_id']) ? intval($_POST['category_id']) : null;
+        $seller_id = !empty($_POST['seller_id']) ? intval($_POST['seller_id']) : null;
+        $original_price = !empty($_POST['original_price']) ? floatval($_POST['original_price']) : null;
+        $description = trim($_POST['description'] ?? '');
+        $status = $_POST['status'] ?? 'active';
         
+        // ตรวจสอบข้อมูลที่จำเป็น
         $errors = [];
+        if(empty($name)) $errors[] = 'กรุณากรอกชื่อสินค้า';
+        if($price <= 0) $errors[] = 'กรุณากรอกราคาที่ถูกต้อง';
+        if($stock < 0) $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
         
-        if(empty($name)) {
-            $errors[] = 'กรุณากรอกชื่อสินค้า';
-        }
-        
-        if($price === false || $price <= 0) {
-            $errors[] = 'กรุณากรอกราคาที่ถูกต้อง';
-        }
-        
-        if($stock === false || $stock < 0) {
-            $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
-        }
-        
-        if(empty($errors)) {
-            // เตรียมข้อมูล
-            $category_id = !empty($_POST['category_id']) ? (int)$_POST['category_id'] : null;
-            $seller_id = !empty($_POST['seller_id']) ? (int)$_POST['seller_id'] : null;
-            $original_price = !empty($_POST['original_price']) ? filter_var($_POST['original_price'], FILTER_VALIDATE_FLOAT) : null;
-            $description = trim($_POST['description'] ?? '');
-            $status = $_POST['status'] ?? 'active';
-            $image = '';
-            
-            // จัดการอัปโหลดรูปภาพ
-            if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
-                $upload = uploadImage($_FILES['image'], 'products');
-                if($upload['success']) {
-                    $image = $upload['filename'];
-                } else {
-                    $errors[] = $upload['message'];
-                }
-            }
-            
-            if(empty($errors)) {
-                // บันทึกข้อมูล
-                $sql = "INSERT INTO products (name, image, description, price, original_price, stock, category_id, seller_id, status, created_at) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
-                
-                query($sql, [
-                    $name, 
-                    $image, 
-                    $description, 
-                    $price, 
-                    $original_price, 
-                    $stock, 
-                    $category_id, 
-                    $seller_id, 
-                    $status
-                ]);
-                
-                $_SESSION['success'] = 'เพิ่มสินค้า "' . $name . '" เรียบร้อยแล้ว';
-                header('Location: admin_products.php');
-                exit();
+        // จัดการอัปโหลดรูปภาพ
+        $image_filename = '';
+        if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
+            $upload_result = uploadImage($_FILES['image'], 'products');
+            if($upload_result['success']) {
+                $image_filename = $upload_result['filename'];
             } else {
-                $error_message = implode('<br>', $errors);
+                $errors[] = 'อัปโหลดรูปไม่สำเร็จ: ' . $upload_result['message'];
             }
+        }
+        
+        // ถ้าไม่มีข้อผิดพลาด ให้บันทึกข้อมูล
+        if(empty($errors)) {
+            $sql = "INSERT INTO products (name, image, description, price, original_price, stock, category_id, seller_id, status, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            
+            query($sql, [
+                $name,
+                $image_filename,
+                $description,
+                $price,
+                $original_price,
+                $stock,
+                $category_id,
+                $seller_id,
+                $status
+            ]);
+            
+            $_SESSION['success'] = 'เพิ่มสินค้า "' . $name . '" เรียบร้อยแล้ว';
+            header('Location: admin_products.php');
+            exit();
         } else {
             $error_message = implode('<br>', $errors);
         }
+        
     } catch(Exception $e) {
         $error_message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
     }
@@ -139,105 +126,84 @@ if(isset($_POST['add_product'])) {
 // ============================================
 if(isset($_POST['edit_product'])) {
     try {
-        $product_id = (int)$_POST['product_id'];
+        $product_id = intval($_POST['product_id']);
         
-        // ตรวจสอบข้อมูลที่จำเป็น
+        // รับข้อมูลจากฟอร์ม
         $name = trim($_POST['name'] ?? '');
-        $price = filter_var($_POST['price'] ?? 0, FILTER_VALIDATE_FLOAT);
-        $stock = filter_var($_POST['stock'] ?? 0, FILTER_VALIDATE_INT);
+        $price = floatval($_POST['price'] ?? 0);
+        $stock = intval($_POST['stock'] ?? 0);
+        $category_id = !empty($_POST['category_id']) ? intval($_POST['category_id']) : null;
+        $seller_id = !empty($_POST['seller_id']) ? intval($_POST['seller_id']) : null;
+        $original_price = !empty($_POST['original_price']) ? floatval($_POST['original_price']) : null;
+        $description = trim($_POST['description'] ?? '');
+        $status = $_POST['status'] ?? 'active';
         
+        // ตรวจสอบข้อมูล
         $errors = [];
+        if(empty($name)) $errors[] = 'กรุณากรอกชื่อสินค้า';
+        if($price <= 0) $errors[] = 'กรุณากรอกราคาที่ถูกต้อง';
+        if($stock < 0) $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
         
-        if(empty($name)) {
-            $errors[] = 'กรุณากรอกชื่อสินค้า';
+        // ดึงข้อมูลสินค้าเก่า
+        $old_product = fetchOne("SELECT * FROM products WHERE id = ?", [$product_id]);
+        if(!$old_product) {
+            throw new Exception('ไม่พบสินค้าที่ต้องการแก้ไข');
         }
         
-        if($price === false || $price <= 0) {
-            $errors[] = 'กรุณากรอกราคาที่ถูกต้อง';
-        }
+        $image_filename = $old_product['image'];
         
-        if($stock === false || $stock < 0) {
-            $errors[] = 'กรุณากรอกจำนวนคงเหลือที่ถูกต้อง';
-        }
-        
-        if(empty($errors)) {
-            // เริ่ม transaction
-            $pdo->beginTransaction();
-            
-            // ดึงข้อมูลสินค้าเก่า
-            $old_product = fetchOne("SELECT * FROM products WHERE id = ?", [$product_id]);
-            
-            if(!$old_product) {
-                throw new Exception('ไม่พบสินค้าที่ต้องการแก้ไข');
-            }
-            
-            // เตรียมข้อมูล
-            $category_id = !empty($_POST['category_id']) ? (int)$_POST['category_id'] : null;
-            $seller_id = !empty($_POST['seller_id']) ? (int)$_POST['seller_id'] : null;
-            $original_price = !empty($_POST['original_price']) ? filter_var($_POST['original_price'], FILTER_VALIDATE_FLOAT) : null;
-            $description = trim($_POST['description'] ?? '');
-            $status = $_POST['status'] ?? 'active';
-            $image = $old_product['image'];
-            
-            // จัดการอัปโหลดรูปภาพใหม่
-            if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
-                $upload = uploadImage($_FILES['image'], 'products');
-                if($upload['success']) {
-                    // ลบรูปเก่า
-                    if(!empty($old_product['image'])) {
-                        $old_image_path = "uploads/products/" . $old_product['image'];
-                        if(file_exists($old_image_path)) {
-                            unlink($old_image_path);
-                        }
+        // จัดการอัปโหลดรูปภาพใหม่
+        if(isset($_FILES['image']) && $_FILES['image']['error'] == UPLOAD_ERR_OK) {
+            $upload_result = uploadImage($_FILES['image'], 'products');
+            if($upload_result['success']) {
+                // ลบรูปเก่า
+                if(!empty($old_product['image'])) {
+                    $old_image_path = "uploads/products/" . $old_product['image'];
+                    if(file_exists($old_image_path)) {
+                        unlink($old_image_path);
                     }
-                    $image = $upload['filename'];
-                } else {
-                    $errors[] = $upload['message'];
                 }
-            }
-            
-            if(empty($errors)) {
-                // อัปเดตข้อมูล
-                $sql = "UPDATE products SET 
-                        name = ?, 
-                        image = ?, 
-                        description = ?, 
-                        price = ?, 
-                        original_price = ?, 
-                        stock = ?, 
-                        category_id = ?, 
-                        seller_id = ?, 
-                        status = ? 
-                        WHERE id = ?";
-                
-                query($sql, [
-                    $name, 
-                    $image, 
-                    $description, 
-                    $price, 
-                    $original_price, 
-                    $stock, 
-                    $category_id, 
-                    $seller_id, 
-                    $status, 
-                    $product_id
-                ]);
-                
-                $pdo->commit();
-                $_SESSION['success'] = 'แก้ไขสินค้า "' . $name . '" เรียบร้อยแล้ว';
-                header('Location: admin_products.php');
-                exit();
+                $image_filename = $upload_result['filename'];
             } else {
-                $pdo->rollBack();
-                $error_message = implode('<br>', $errors);
+                $errors[] = 'อัปโหลดรูปไม่สำเร็จ: ' . $upload_result['message'];
             }
+        }
+        
+        // อัปเดตข้อมูล
+        if(empty($errors)) {
+            $sql = "UPDATE products SET 
+                    name = ?, 
+                    image = ?, 
+                    description = ?, 
+                    price = ?, 
+                    original_price = ?, 
+                    stock = ?, 
+                    category_id = ?, 
+                    seller_id = ?, 
+                    status = ? 
+                    WHERE id = ?";
+            
+            query($sql, [
+                $name,
+                $image_filename,
+                $description,
+                $price,
+                $original_price,
+                $stock,
+                $category_id,
+                $seller_id,
+                $status,
+                $product_id
+            ]);
+            
+            $_SESSION['success'] = 'แก้ไขสินค้า "' . $name . '" เรียบร้อยแล้ว';
+            header('Location: admin_products.php');
+            exit();
         } else {
             $error_message = implode('<br>', $errors);
         }
+        
     } catch(Exception $e) {
-        if(isset($pdo)) {
-            $pdo->rollBack();
-        }
         $error_message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
     }
 }
@@ -625,10 +591,6 @@ if(isset($_GET['edit'])) {
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
-        .form-group input.error {
-            border-color: #ef4444;
-        }
-
         /* ===== Image Preview ===== */
         .image-preview {
             width: 150px;
@@ -660,6 +622,7 @@ if(isset($_GET['edit'])) {
             border-radius: 0.375rem;
             overflow: hidden;
             background: #f8fafc;
+            border: 1px solid #e2e8f0;
         }
 
         .product-thumb img {
@@ -692,6 +655,7 @@ if(isset($_GET['edit'])) {
             padding: 1rem;
             border-bottom: 1px solid #f1f5f9;
             color: #0f172a;
+            vertical-align: middle;
         }
 
         .status-badge {
@@ -856,48 +820,6 @@ if(isset($_GET['edit'])) {
             gap: 1rem;
             justify-content: flex-end;
             margin-top: 2rem;
-        }
-
-        /* ===== Stats Cards ===== */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            background: #dbeafe;
-            border-radius: 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #3b82f6;
-            font-size: 1.5rem;
-        }
-
-        .stat-info h3 {
-            font-size: 0.9rem;
-            color: #64748b;
-            margin-bottom: 0.3rem;
-        }
-
-        .stat-info .value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #0f172a;
         }
 
         /* ===== Responsive ===== */
@@ -1103,11 +1025,16 @@ if(isset($_GET['edit'])) {
                                     <td>
                                         <div class="product-thumb">
                                             <?php 
-                                            $image_url = !empty($product['image']) ? "uploads/products/" . $product['image'] : "https://via.placeholder.com/60x60?text=No+Image";
+                                            // สร้าง URL รูปภาพ
+                                            if(!empty($product['image']) && file_exists("uploads/products/" . $product['image'])) {
+                                                $image_url = "uploads/products/" . $product['image'];
+                                            } else {
+                                                $image_url = "https://via.placeholder.com/60x60/e2e8f0/64748b?text=" . urlencode(substr($product['name'], 0, 1));
+                                            }
                                             ?>
                                             <img src="<?php echo $image_url; ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                                 onerror="this.src='https://via.placeholder.com/60x60?text=Error'">
+                                                 onerror="this.src='https://via.placeholder.com/60x60/ef4444/ffffff?text=Error'">
                                         </div>
                                     </td>
                                     <td>
@@ -1209,7 +1136,7 @@ if(isset($_GET['edit'])) {
                 
                 <div class="form-group">
                     <label>รูปภาพสินค้า</label>
-                    <input type="file" name="image" accept="image/*" onchange="previewImage(this, 'add_preview')">
+                    <input type="file" name="image" id="add_image" accept="image/*" onchange="previewImage(this, 'add_preview')">
                     <div class="image-preview" id="add_preview">
                         <i class="fas fa-image"></i>
                     </div>
@@ -1307,16 +1234,20 @@ if(isset($_GET['edit'])) {
                     <label>รูปภาพปัจจุบัน</label>
                     <div class="image-preview" style="margin-bottom: 1rem;">
                         <?php 
-                        $current_image = !empty($edit_product['image']) ? "uploads/products/" . $edit_product['image'] : "https://via.placeholder.com/150x150?text=No+Image";
+                        if(!empty($edit_product['image']) && file_exists("uploads/products/" . $edit_product['image'])) {
+                            $current_image = "uploads/products/" . $edit_product['image'];
+                        } else {
+                            $current_image = "https://via.placeholder.com/150x150/e2e8f0/64748b?text=No+Image";
+                        }
                         ?>
                         <img src="<?php echo $current_image; ?>" 
                              alt="current" 
                              style="width: 100%; height: 100%; object-fit: cover;"
-                             onerror="this.src='https://via.placeholder.com/150x150?text=Error'">
+                             onerror="this.src='https://via.placeholder.com/150x150/ef4444/ffffff?text=Error'">
                     </div>
                     
                     <label>เปลี่ยนรูปภาพใหม่ (เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน)</label>
-                    <input type="file" name="image" accept="image/*" onchange="previewImage(this, 'edit_preview')">
+                    <input type="file" name="image" id="edit_image" accept="image/*" onchange="previewImage(this, 'edit_preview')">
                     <div class="image-preview" id="edit_preview">
                         <i class="fas fa-image"></i>
                     </div>
@@ -1385,54 +1316,6 @@ if(isset($_GET['edit'])) {
             }
         }
         
-        // ตรวจสอบฟอร์มเพิ่มสินค้า
-        function validateAddForm() {
-            const name = document.getElementById('add_name').value.trim();
-            const price = parseFloat(document.getElementById('add_price').value);
-            const stock = parseInt(document.getElementById('add_stock').value);
-            
-            if(name === '') {
-                alert('กรุณากรอกชื่อสินค้า');
-                return false;
-            }
-            
-            if(isNaN(price) || price <= 0) {
-                alert('กรุณากรอกราคาที่ถูกต้อง');
-                return false;
-            }
-            
-            if(isNaN(stock) || stock < 0) {
-                alert('กรุณากรอกจำนวนคงเหลือที่ถูกต้อง');
-                return false;
-            }
-            
-            return true;
-        }
-        
-        // ตรวจสอบฟอร์มแก้ไขสินค้า
-        function validateEditForm() {
-            const name = document.querySelector('input[name="name"]').value.trim();
-            const price = parseFloat(document.querySelector('input[name="price"]').value);
-            const stock = parseInt(document.querySelector('input[name="stock"]').value);
-            
-            if(name === '') {
-                alert('กรุณากรอกชื่อสินค้า');
-                return false;
-            }
-            
-            if(isNaN(price) || price <= 0) {
-                alert('กรุณากรอกราคาที่ถูกต้อง');
-                return false;
-            }
-            
-            if(isNaN(stock) || stock < 0) {
-                alert('กรุณากรอกจำนวนคงเหลือที่ถูกต้อง');
-                return false;
-            }
-            
-            return true;
-        }
-        
         // ปิด Modal เมื่อคลิกด้านนอก
         window.onclick = function(event) {
             if(event.target.classList.contains('modal')) {
@@ -1440,17 +1323,6 @@ if(isset($_GET['edit'])) {
                 document.body.style.overflow = 'auto';
             }
         }
-        
-        // ป้องกันการ submit ซ้ำ
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function() {
-                const submitBtn = this.querySelector('button[type="submit"]');
-                if(submitBtn) {
-                    submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...';
-                }
-            });
-        });
     </script>
 </body>
 </html>
