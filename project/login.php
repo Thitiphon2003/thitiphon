@@ -8,10 +8,12 @@ if (isset($_SESSION['user_id'])) {
 }
 
 $error = '';
+$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'index.php';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
+    $redirect = $_POST['redirect'] ?? 'index.php';
     
     if (empty($username) || empty($password)) {
         $error = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
@@ -23,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['username'] = $user['username'];
             $_SESSION['fullname'] = $user['firstname'] . ' ' . $user['lastname'];
             
-            header('Location: index.php');
+            header('Location: ' . $redirect);
             exit();
         } else {
             $error = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
@@ -56,15 +58,9 @@ include 'includes/header.php';
                         </div>
                     <?php endif; ?>
                     
-                    <?php if (isset($_SESSION['register_success'])): ?>
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <?php echo $_SESSION['register_success']; unset($_SESSION['register_success']); ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    <?php endif; ?>
-                    
                     <form method="POST">
+                        <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
+                        
                         <div class="mb-3">
                             <label class="form-label">ชื่อผู้ใช้ หรือ อีเมล</label>
                             <div class="input-group">

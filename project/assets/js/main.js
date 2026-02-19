@@ -118,6 +118,18 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// อัปเดตจำนวนสินค้าในตะกร้า
+function updateCartCount() {
+    fetch('get_cart_count.php')
+        .then(response => response.json())
+        .then(data => {
+            document.querySelectorAll('.cart-count').forEach(el => {
+                el.textContent = data.count || 0;
+            });
+        })
+        .catch(error => console.error('Error:', error));
+}
+
 // เริ่มต้นเมื่อโหลดหน้า
 document.addEventListener('DOMContentLoaded', () => {
     updateCartCount();
