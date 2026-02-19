@@ -151,7 +151,7 @@ include 'includes/header.php';
                                     <p class="small text-success mb-2">
                                         <i class="fas fa-box me-1"></i>คงเหลือ <?php echo $product['stock']; ?> ชิ้น
                                     </p>
-                                    <button class="btn btn-primary w-100" onclick="addToCart(<?php echo $product['id']; ?>)">
+                                    <button class="btn btn-primary w-100" onclick="addToCart(<?php echo $product['id']; ?>, event)">
                                         <i class="fas fa-cart-plus me-2"></i>หยิบใส่ตะกร้า
                                     </button>
                                 </div>

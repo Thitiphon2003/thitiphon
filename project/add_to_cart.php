@@ -2,6 +2,13 @@
 session_start();
 require_once 'db_connect.php';
 
+// ปิด error reporting ชั่วคราวเพื่อไม่ให้มี output แทรก
+error_reporting(0);
+ini_set('display_errors', 0);
+
+// ล้าง output buffer
+ob_clean();
+
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id'])) {
@@ -43,12 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 echo json_encode(['success' => false, 'message' => 'จำนวนสินค้าในตะกร้ารวมกันเกินสต็อก (เหลือ ' . $product['stock'] . ' ชิ้น)']);
                 exit();
             }
-            query("UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?", 
-                    [$new_quantity, $user_id, $product_id]);
+            query("UPDATE cart_items SET quantity = ?, updated_at = NOW() WHERE user_id = ? AND product_id = ?", 
+                  [$new_quantity, $user_id, $product_id]);
             $message = 'อัปเดตจำนวนสินค้าในตะกร้าเรียบร้อย';
         } else {
             // เพิ่มใหม่
-            query("INSERT INTO cart_items (user_id, product_id, quantity, selected) VALUES (?, ?, ?, 1)", 
+            query("INSERT INTO cart_items (user_id, product_id, quantity, selected, created_at, updated_at) 
+                    VALUES (?, ?, ?, 1, NOW(), NOW())", 
                     [$user_id, $product_id, $quantity]);
             $message = 'เพิ่มสินค้าลงตะกร้าเรียบร้อย';
         }
@@ -56,16 +64,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // นับจำนวนสินค้าในตะกร้า
         $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$user_id])['count'];
         
+        // ส่ง Response สำเร็จ
         echo json_encode([
             'success' => true,
             'message' => $message,
-            'cart_count' => $count
+            'cart_count' => (int)$count
         ]);
+        exit();
         
     } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
+        // ส่ง Response ข้อผิดพลาด
+        echo json_encode([
+            'success' => false, 
+            'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()
+        ]);
+        exit();
     }
 } else {
     echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+    exit();
 }
 ?>
