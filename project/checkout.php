@@ -90,8 +90,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
             }
         }
         
-        // สร้างหมายเลขคำสั่งซื้อ
-        $order_number = 'ORD-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+        // สร้างหมายเลขคำสั่งซื้อ (ORD-YYYYMMDD-XXXX)
+        $date = date('Ymd');
+        $random = str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+        $order_number = "ORD-{$date}-{$random}";
+        
+        // ตรวจสอบหมายเลขซ้ำ
+        $check = fetchOne("SELECT id FROM orders WHERE order_number = ?", [$order_number]);
+        if ($check) {
+            // ถ้าซ้ำให้สุ่มใหม่
+            $random = str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+            $order_number = "ORD-{$date}-{$random}";
+        }
         
         // บันทึกคำสั่งซื้อ
         $order_sql = "INSERT INTO orders (
@@ -138,16 +148,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
         
         $pdo->commit();
         
-        // เก็บข้อความสำเร็จใน session
+        // เก็บข้อมูลใน session เพื่อแสดงในหน้าถัดไป
         $_SESSION['order_success'] = true;
         $_SESSION['order_number'] = $order_number;
+        $_SESSION['order_total'] = $total;
         
-        // redirect ไปหน้าคำสั่งซื้อ
-        header('Location: orders.php?order_success=1&order=' . $order_number);
+        // Redirect ไปหน้า orders พร้อมพารามิเตอร์
+        header('Location: orders.php?success=1&order=' . urlencode($order_number));
         exit();
         
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $error_message = $e->getMessage();
     }
 }
@@ -357,50 +370,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
     text-align: right;
 }
 
-.success-container {
-    text-align: center;
-    padding: 3rem;
-    background: white;
-    border-radius: 15px;
-    border: 1px solid #e2e8f0;
-}
-
-.success-icon {
-    width: 100px;
-    height: 100px;
-    background: #10b981;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 3rem;
-    margin: 0 auto 2rem;
-    animation: scaleIn 0.5s ease;
-}
-
-@keyframes scaleIn {
-    from {
-        transform: scale(0);
-        opacity: 0;
-    }
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-.order-number {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #2563eb;
-    margin: 1rem 0;
-    padding: 1rem;
-    background: #f8fafc;
-    border-radius: 8px;
-    display: inline-block;
-}
-
 .loading {
     position: relative;
     opacity: 0.6;
@@ -506,10 +475,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
         </div>
     <?php endif; ?>
     
-    <div class="row">
-        <!-- ฟอร์มชำระเงิน -->
-        <div class="col-lg-8">
-            <form method="POST" id="checkoutForm">
+    <form method="POST" id="checkoutForm" onsubmit="return validateForm()">
+        <div class="row">
+            <!-- ฟอร์มชำระเงิน -->
+            <div class="col-lg-8">
                 <!-- รายการสินค้า -->
                 <div class="card mb-4">
                     <div class="card-header bg-white">
@@ -550,7 +519,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                     <div class="card-header bg-white">
                         <h5 class="mb-0">
                             <i class="fas fa-map-marker-alt text-primary me-2"></i>
-                            ที่อยู่จัดส่ง
+                            ที่อยู่จัดส่ง <span class="text-danger">*</span>
                         </h5>
                     </div>
                     <div class="card-body">
@@ -604,7 +573,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                     <div class="card-header bg-white">
                         <h5 class="mb-0">
                             <i class="fas fa-credit-card text-primary me-2"></i>
-                            วิธีการชำระเงิน
+                            วิธีการชำระเงิน <span class="text-danger">*</span>
                         </h5>
                     </div>
                     <div class="card-body">
@@ -665,53 +634,53 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                         <textarea class="form-control" name="notes" rows="3" placeholder="ระบุข้อความเพิ่มเติม..."></textarea>
                     </div>
                 </div>
-                
-                <!-- ปุ่มดำเนินการ -->
-                <div class="d-flex justify-content-between">
-                    <a href="cart.php" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left me-2"></i>กลับไปตะกร้าสินค้า
-                    </a>
-                    <button type="submit" name="place_order" class="btn btn-primary btn-lg" id="placeOrderBtn">
-                        <i class="fas fa-check-circle me-2"></i>ยืนยันคำสั่งซื้อ
-                    </button>
-                </div>
-            </form>
-        </div>
-        
-        <!-- สรุปคำสั่งซื้อ -->
-        <div class="col-lg-4">
-            <div class="order-summary">
-                <h5 class="mb-4">สรุปคำสั่งซื้อ</h5>
-                
-                <div class="summary-row">
-                    <span>ราคาสินค้า (<?php echo $items_count; ?> รายการ)</span>
-                    <span class="fw-bold">฿<?php echo number_format($subtotal); ?></span>
-                </div>
-                <div class="summary-row">
-                    <span>ค่าจัดส่ง</span>
-                    <span class="fw-bold">฿<?php echo number_format($total_shipping); ?></span>
-                </div>
-                
-                <div class="summary-row total">
-                    <span>ยอดสุทธิ</span>
-                    <span>฿<?php echo number_format($total); ?></span>
-                </div>
-                
-                <div class="mt-4 p-3 bg-light rounded">
-                    <div class="d-flex align-items-center gap-2 text-success mb-2">
-                        <i class="fas fa-shield-alt"></i>
-                        <small class="fw-bold">ซื้ออย่างปลอดภัย</small>
+            </div>
+            
+            <!-- สรุปคำสั่งซื้อ -->
+            <div class="col-lg-4">
+                <div class="order-summary">
+                    <h5 class="mb-4">สรุปคำสั่งซื้อ</h5>
+                    
+                    <div class="summary-row">
+                        <span>ราคาสินค้า (<?php echo $items_count; ?> รายการ)</span>
+                        <span class="fw-bold">฿<?php echo number_format($subtotal); ?></span>
                     </div>
-                    <small class="text-muted d-block mb-1">
-                        <i class="fas fa-check-circle me-1"></i>ข้อมูลถูกเข้ารหัส
-                    </small>
-                    <small class="text-muted d-block">
-                        <i class="fas fa-check-circle me-1"></i>รับประกันคืนสินค้า 7 วัน
-                    </small>
+                    <div class="summary-row">
+                        <span>ค่าจัดส่ง</span>
+                        <span class="fw-bold">฿<?php echo number_format($total_shipping); ?></span>
+                    </div>
+                    
+                    <div class="summary-row total">
+                        <span>ยอดสุทธิ</span>
+                        <span>฿<?php echo number_format($total); ?></span>
+                    </div>
+                    
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <div class="d-flex align-items-center gap-2 text-success mb-2">
+                            <i class="fas fa-shield-alt"></i>
+                            <small class="fw-bold">ซื้ออย่างปลอดภัย</small>
+                        </div>
+                        <small class="text-muted d-block mb-1">
+                            <i class="fas fa-check-circle me-1"></i>ข้อมูลถูกเข้ารหัส
+                        </small>
+                        <small class="text-muted d-block">
+                            <i class="fas fa-check-circle me-1"></i>รับประกันคืนสินค้า 7 วัน
+                        </small>
+                    </div>
+                    
+                    <!-- ปุ่มดำเนินการ -->
+                    <div class="d-flex flex-column gap-2 mt-4">
+                        <a href="cart.php" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-arrow-left me-2"></i>กลับไปตะกร้าสินค้า
+                        </a>
+                        <button type="submit" name="place_order" class="btn btn-primary btn-lg w-100" id="placeOrderBtn">
+                            <i class="fas fa-check-circle me-2"></i>ยืนยันคำสั่งซื้อ
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </form>
 </div>
 
 <!-- Modal เพิ่มที่อยู่ -->
@@ -842,6 +811,30 @@ function saveAddress(event) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = 'บันทึกที่อยู่';
     });
+}
+
+function validateForm() {
+    // ตรวจสอบว่ามีที่อยู่หรือไม่
+    <?php if (empty($addresses)): ?>
+        showToast('กรุณาเพิ่มที่อยู่จัดส่งก่อนดำเนินการ', 'warning');
+        return false;
+    <?php endif; ?>
+    
+    // ตรวจสอบว่าเลือกที่อยู่หรือไม่
+    const addressSelected = document.querySelector('input[name="address_id"]:checked');
+    if (!addressSelected) {
+        showToast('กรุณาเลือกที่อยู่จัดส่ง', 'warning');
+        return false;
+    }
+    
+    // ตรวจสอบว่าเลือกวิธีการชำระเงินหรือไม่
+    const paymentSelected = document.querySelector('input[name="payment_method"]:checked');
+    if (!paymentSelected) {
+        showToast('กรุณาเลือกวิธีการชำระเงิน', 'warning');
+        return false;
+    }
+    
+    return true;
 }
 
 // ป้องกันการ submit ซ้ำ

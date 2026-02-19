@@ -14,7 +14,7 @@ $page_title = 'คำสั่งซื้อของฉัน';
 include 'includes/header.php';
 
 // แสดงข้อความสำเร็จจากการสั่งซื้อ
-if (isset($_GET['order_success']) && isset($_GET['order'])) {
+if (isset($_GET['success']) && isset($_GET['order'])) {
     $success_message = 'สั่งซื้อสำเร็จ! หมายเลขคำสั่งซื้อ: ' . htmlspecialchars($_GET['order']);
 }
 
@@ -607,38 +607,6 @@ foreach ($orders as $order) {
     width: 20px;
 }
 
-/* Modal Styles */
-.order-detail-item {
-    border-bottom: 1px solid #e2e8f0;
-    padding: 1rem 0;
-}
-
-.order-detail-item:last-child {
-    border-bottom: none;
-}
-
-.order-detail-label {
-    color: #64748b;
-    font-size: 0.85rem;
-    margin-bottom: 0.25rem;
-}
-
-.order-detail-value {
-    font-weight: 500;
-}
-
-/* Animations */
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateX(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
 /* Toast Container */
 .toast-container {
     position: fixed;
@@ -670,6 +638,18 @@ foreach ($orders as $order) {
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
     }
 }
 
