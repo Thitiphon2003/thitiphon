@@ -109,7 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
             subtotal, total, payment_method, payment_status, order_status, notes, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, NOW())";
         
-        query($order_sql, [
+        $stmt = $pdo->prepare($order_sql);
+        $stmt->execute([
             $order_number,
             $user_id,
             $address_id,
@@ -129,7 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                 order_id, product_id, product_name, price, quantity, subtotal
             ) VALUES (?, ?, ?, ?, ?, ?)";
             
-            query($item_sql, [
+            $stmt = $pdo->prepare($item_sql);
+            $stmt->execute([
                 $order_id,
                 $item['product_id'],
                 $item['name'],
@@ -139,12 +141,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
             ]);
             
             // อัปเดตสต็อกสินค้า
-            query("UPDATE products SET stock = stock - ? WHERE id = ?", 
-                  [$item['quantity'], $item['product_id']]);
+            $update_sql = "UPDATE products SET stock = stock - ? WHERE id = ?";
+            $stmt = $pdo->prepare($update_sql);
+            $stmt->execute([$item['quantity'], $item['product_id']]);
         }
         
         // ลบสินค้าที่เลือกออกจากตะกร้า
-        query("DELETE FROM cart_items WHERE user_id = ? AND selected = 1", [$user_id]);
+        $delete_sql = "DELETE FROM cart_items WHERE user_id = ? AND selected = 1";
+        $stmt = $pdo->prepare($delete_sql);
+        $stmt->execute([$user_id]);
         
         $pdo->commit();
         
@@ -213,16 +218,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
     right: 50%;
 }
 
-.step.active .step-number {
-    background: #2563eb;
-    color: white;
-    border-color: #2563eb;
-}
-
 .step.completed .step-number {
     background: #10b981;
     color: white;
     border-color: #10b981;
+}
+
+.step.active .step-number {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
 }
 
 .step-number {
@@ -449,17 +454,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
     }
 }
 
-.address-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-.btn-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.8rem;
-}
-
 .no-address {
     text-align: center;
     padding: 2rem;
@@ -520,7 +514,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
         </div>
     <?php endif; ?>
     
-    <form method="POST" id="checkoutForm" onsubmit="return validateForm()">
+    <form method="POST" id="checkoutForm">
         <div class="row">
             <!-- ฟอร์มชำระเงิน -->
             <div class="col-lg-8">
@@ -583,9 +577,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                             <div class="row g-3">
                                 <?php foreach ($addresses as $address): ?>
                                 <div class="col-md-6">
-                                    <label class="address-card w-100 <?php echo $address['is_default'] ? 'selected' : ''; ?>">
+                                    <div class="address-card <?php echo $address['is_default'] ? 'selected' : ''; ?>" onclick="selectAddress(this, <?php echo $address['id']; ?>)">
                                         <input type="radio" name="address_id" value="<?php echo $address['id']; ?>" 
-                                               <?php echo $address['is_default'] ? 'checked' : ''; ?> required>
+                                               <?php echo $address['is_default'] ? 'checked' : ''; ?> style="display: none;">
                                         <span class="radio-custom"></span>
                                         <div>
                                             <div class="d-flex justify-content-between align-items-start mb-2">
@@ -605,7 +599,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                                                 </div>
                                             </div>
                                         </div>
-                                    </label>
+                                    </div>
                                 </div>
                                 <?php endforeach; ?>
                             </div>
@@ -624,44 +618,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="payment-method w-100 <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] == 'bank_transfer') ? 'selected' : ''; ?>">
-                                    <input type="radio" name="payment_method" value="bank_transfer" <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] == 'bank_transfer') ? 'checked' : ''; ?>>
+                                <div class="payment-method <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] == 'bank_transfer') ? 'selected' : ''; ?>" onclick="selectPayment(this, 'bank_transfer')">
+                                    <input type="radio" name="payment_method" value="bank_transfer" <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] == 'bank_transfer') ? 'checked' : ''; ?> style="display: none;">
                                     <i class="fas fa-university fa-2x text-primary"></i>
                                     <div>
                                         <div class="fw-bold">โอนผ่านธนาคาร</div>
                                         <small class="text-muted">ธ.กรุงเทพ / กสิกรไทย / ไทยพาณิชย์</small>
                                     </div>
-                                </label>
+                                </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="payment-method w-100">
-                                    <input type="radio" name="payment_method" value="credit_card">
+                                <div class="payment-method" onclick="selectPayment(this, 'credit_card')">
+                                    <input type="radio" name="payment_method" value="credit_card" style="display: none;">
                                     <i class="fas fa-credit-card fa-2x text-primary"></i>
                                     <div>
                                         <div class="fw-bold">บัตรเครดิต/เดบิต</div>
                                         <small class="text-muted">Visa / Mastercard / JCB</small>
                                     </div>
-                                </label>
+                                </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="payment-method w-100">
-                                    <input type="radio" name="payment_method" value="promptpay">
+                                <div class="payment-method" onclick="selectPayment(this, 'promptpay')">
+                                    <input type="radio" name="payment_method" value="promptpay" style="display: none;">
                                     <i class="fas fa-mobile-alt fa-2x text-primary"></i>
                                     <div>
                                         <div class="fw-bold">พร้อมเพย์</div>
                                         <small class="text-muted">สแกน QR Code เพื่อชำระเงิน</small>
                                     </div>
-                                </label>
+                                </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="payment-method w-100">
-                                    <input type="radio" name="payment_method" value="cod">
+                                <div class="payment-method" onclick="selectPayment(this, 'cod')">
+                                    <input type="radio" name="payment_method" value="cod" style="display: none;">
                                     <i class="fas fa-truck fa-2x text-primary"></i>
                                     <div>
                                         <div class="fw-bold">เก็บเงินปลายทาง</div>
                                         <small class="text-muted">ชำระเงินเมื่อได้รับสินค้า</small>
                                     </div>
-                                </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -819,6 +813,40 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
+// เลือกที่อยู่
+function selectAddress(element, addressId) {
+    // เอา selected ออกจากที่อยู่ทั้งหมด
+    document.querySelectorAll('.address-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // เพิ่ม selected ให้ที่อยู่ที่เลือก
+    element.classList.add('selected');
+    
+    // เลือก radio button
+    const radio = element.querySelector('input[type="radio"]');
+    if (radio) {
+        radio.checked = true;
+    }
+}
+
+// เลือกวิธีการชำระเงิน
+function selectPayment(element, method) {
+    // เอา selected ออกจากวิธีการชำระเงินทั้งหมด
+    document.querySelectorAll('.payment-method').forEach(m => {
+        m.classList.remove('selected');
+    });
+    
+    // เพิ่ม selected ให้วิธีที่เลือก
+    element.classList.add('selected');
+    
+    // เลือก radio button
+    const radio = element.querySelector('input[type="radio"]');
+    if (radio) {
+        radio.checked = true;
+    }
+}
+
 // แสดง modal เพิ่มที่อยู่
 function showAddAddressModal() {
     const addModal = new bootstrap.Modal(document.getElementById('addressModal'));
@@ -868,17 +896,12 @@ function saveAddress(event) {
     });
 }
 
-// ตรวจสอบฟอร์มก่อนส่ง
-function validateForm() {
-    // ตรวจสอบว่ามีที่อยู่หรือไม่
-    <?php if (empty($addresses)): ?>
-        showToast('กรุณาเพิ่มที่อยู่จัดส่งก่อนดำเนินการ', 'warning');
-        return false;
-    <?php endif; ?>
-    
+// ตรวจสอบฟอร์มก่อนส่ง (ป้องกันการ submit ซ้ำ)
+document.getElementById('checkoutForm')?.addEventListener('submit', function(e) {
     // ตรวจสอบว่าเลือกที่อยู่หรือไม่
     const addressSelected = document.querySelector('input[name="address_id"]:checked');
     if (!addressSelected) {
+        e.preventDefault();
         showToast('กรุณาเลือกที่อยู่จัดส่ง', 'warning');
         return false;
     }
@@ -886,27 +909,34 @@ function validateForm() {
     // ตรวจสอบว่าเลือกวิธีการชำระเงินหรือไม่
     const paymentSelected = document.querySelector('input[name="payment_method"]:checked');
     if (!paymentSelected) {
+        e.preventDefault();
         showToast('กรุณาเลือกวิธีการชำระเงิน', 'warning');
         return false;
     }
     
-    return true;
-}
-
-// ป้องกันการ submit ซ้ำ
-document.getElementById('checkoutForm')?.addEventListener('submit', function() {
+    // ป้องกันการ submit ซ้ำ
     const btn = document.getElementById('placeOrderBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังดำเนินการ...';
+    
+    return true;
 });
 
-// เลือกวิธีการชำระเงิน
-document.querySelectorAll('.payment-method').forEach(method => {
-    method.addEventListener('click', function() {
-        document.querySelectorAll('.payment-method').forEach(m => m.classList.remove('selected'));
-        this.classList.add('selected');
-        this.querySelector('input[type="radio"]').checked = true;
-    });
+// ตั้งค่าเริ่มต้นเมื่อโหลดหน้า
+document.addEventListener('DOMContentLoaded', function() {
+    // ถ้ามีที่อยู่ค่าเริ่มต้น ให้เลือกที่อยู่นั้น
+    const defaultAddress = document.querySelector('.address-card.selected');
+    if (defaultAddress) {
+        const radio = defaultAddress.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+    }
+    
+    // ถ้ามีวิธีการชำระเงินเริ่มต้น
+    const defaultPayment = document.querySelector('.payment-method.selected');
+    if (defaultPayment) {
+        const radio = defaultPayment.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+    }
 });
 </script>
 
