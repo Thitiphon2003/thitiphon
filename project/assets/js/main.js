@@ -8,11 +8,17 @@ function updateCartCount() {
             document.querySelectorAll('.cart-count').forEach(el => {
                 el.textContent = data.count || 0;
             });
-        });
+        })
+        .catch(error => console.error('Error:', error));
 }
 
 // เพิ่มสินค้าลงตะกร้า
 function addToCart(productId, quantity = 1) {
+    if (!productId || productId === 0) {
+        showToast('กรุณาเลือกสินค้า', 'warning');
+        return;
+    }
+    
     fetch('add_to_cart.php', {
         method: 'POST',
         headers: {
@@ -22,12 +28,26 @@ function addToCart(productId, quantity = 1) {
     })
     .then(response => response.json())
     .then(data => {
-        if(data.success) {
+        if (data.success) {
             updateCartCount();
             showToast('เพิ่มสินค้าลงตะกร้าเรียบร้อย', 'success');
+            
+            // สั่นการ์ดสินค้า
+            const btn = event.target;
+            const card = btn.closest('.card');
+            if (card) {
+                card.style.animation = 'shake 0.5s';
+                setTimeout(() => {
+                    card.style.animation = '';
+                }, 500);
+            }
         } else {
             showToast(data.message || 'เกิดข้อผิดพลาด', 'danger');
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'danger');
     });
 }
 
@@ -72,63 +92,31 @@ function createToastContainer() {
     return container;
 }
 
-// แสดงตัวอย่างรูปภาพ
-function previewImage(input, previewId) {
-    const preview = document.getElementById(previewId);
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = e => {
-            preview.innerHTML = `<img src="${e.target.result}" class="img-fluid">`;
-        };
-        reader.readAsDataURL(input.files[0]);
+// เพิ่ม CSS animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
     }
-}
-
-// ตรวจสอบความแข็งแรงของรหัสผ่าน
-function checkPasswordStrength(password) {
-    let strength = 0;
-    if (password.length >= 8) strength++;
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^a-zA-Z0-9]/.test(password)) strength++;
     
-    const messages = ['อ่อนมาก', 'อ่อน', 'ปานกลาง', 'ดี', 'ดีมาก'];
-    const colors = ['#ef4444', '#f59e0b', '#f59e0b', '#10b981', '#10b981'];
-    
-    return {
-        score: strength,
-        text: messages[strength] || 'อ่อนมาก',
-        color: colors[strength] || '#ef4444'
-    };
-}
-
-// ค้นหาสินค้า
-function searchProducts() {
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput && searchInput.value.trim()) {
-        window.location.href = `category.php?search=${encodeURIComponent(searchInput.value.trim())}`;
+    .toast {
+        animation: slideInRight 0.3s ease;
     }
-}
-
-// เรียงลำดับสินค้า
-function sortProducts(value) {
-    const url = new URL(window.location.href);
-    url.searchParams.set('sort', value);
-    window.location.href = url.toString();
-}
-
-// แสดงจำนวนสินค้าต่อหน้า
-function showPerPage(value) {
-    const url = new URL(window.location.href);
-    url.searchParams.set('per_page', value);
-    window.location.href = url.toString();
-}
-
-// ยืนยันการลบ
-function confirmDelete(message = 'คุณแน่ใจหรือไม่?') {
-    return confirm(message);
-}
+    
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+`;
+document.head.appendChild(style);
 
 // เริ่มต้นเมื่อโหลดหน้า
 document.addEventListener('DOMContentLoaded', () => {
@@ -137,7 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // เพิ่ม active class ให้กับลิงก์ปัจจุบัน
     const currentPage = window.location.pathname.split('/').pop();
     document.querySelectorAll('.nav-link').forEach(link => {
-        if (link.getAttribute('href') === currentPage) {
+        const href = link.getAttribute('href');
+        if (href === currentPage || (currentPage === '' && href === 'index.php')) {
             link.classList.add('active');
         }
     });
