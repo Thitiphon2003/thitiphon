@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
             $order_number = "ORD-{$date}-{$random}";
         }
         
-        // บันทึกคำสั่งซื้อ
+        // บันทึกคำสั่งซื้อ (เชื่อมกับ user_id)
         $order_sql = "INSERT INTO orders (
             order_number, user_id, address_id, shipping_method, shipping_fee,
             subtotal, total, payment_method, payment_status, order_status, notes, created_at

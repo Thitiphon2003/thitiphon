@@ -19,7 +19,7 @@ if (isset($_GET['success']) && isset($_GET['order'])) {
 }
 
 // ============================================
-// ดึงข้อมูลสรุปคำสั่งซื้อ
+// ดึงข้อมูลสรุปคำสั่งซื้อ (เฉพาะ user นี้)
 // ============================================
 $summary = fetchOne("SELECT 
     COUNT(*) as total_orders,
@@ -38,7 +38,7 @@ $status_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 // ============================================
-// สร้าง SQL Query ตามเงื่อนไข
+// สร้าง SQL Query ตามเงื่อนไข (เฉพาะ user นี้)
 // ============================================
 $where = "WHERE user_id = ?";
 $params = [$user_id];
@@ -57,7 +57,7 @@ if (!empty($search)) {
 }
 
 // ============================================
-// ดึงข้อมูลคำสั่งซื้อ
+// ดึงข้อมูลคำสั่งซื้อ (เฉพาะ user นี้)
 // ============================================
 $orders = fetchAll("SELECT * FROM orders $where ORDER BY created_at DESC", $params);
 
@@ -76,12 +76,17 @@ foreach ($orders as $order) {
 $order_addresses = [];
 foreach ($orders as $order) {
     if ($order['address_id']) {
-        $address = fetchOne("SELECT * FROM user_addresses WHERE id = ?", [$order['address_id']]);
+        $address = fetchOne("SELECT * FROM user_addresses WHERE id = ? AND user_id = ?", [$order['address_id'], $user_id]);
         if ($address) {
             $order_addresses[$order['id']] = $address;
         }
     }
 }
+
+// ============================================
+// ดึงข้อมูลผู้ใช้สำหรับแสดง
+// ============================================
+$user = fetchOne("SELECT * FROM users WHERE id = ?", [$user_id]);
 ?>
 
 <style>
@@ -607,6 +612,15 @@ foreach ($orders as $order) {
     width: 20px;
 }
 
+/* User Info */
+.user-info {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
 /* Toast Container */
 .toast-container {
     position: fixed;
@@ -740,6 +754,32 @@ foreach ($orders as $order) {
         </div>
     </div>
     
+    <!-- User Info -->
+    <div class="user-info mb-4">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-1">
+                    <i class="fas fa-user text-primary me-2"></i>
+                    <span><?php echo htmlspecialchars($user['firstname'] . ' ' . $user['lastname']); ?></span>
+                </div>
+                <div class="mb-1">
+                    <i class="fas fa-envelope text-primary me-2"></i>
+                    <span><?php echo htmlspecialchars($user['email']); ?></span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-1">
+                    <i class="fas fa-phone text-primary me-2"></i>
+                    <span><?php echo htmlspecialchars($user['phone'] ?? '-'); ?></span>
+                </div>
+                <div class="mb-1">
+                    <i class="fas fa-star text-primary me-2"></i>
+                    <span>ระดับสมาชิก: <?php echo $user['level'] ?? 'Bronze'; ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <?php if (isset($success_message)): ?>
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="fas fa-check-circle me-2"></i>
@@ -836,7 +876,7 @@ foreach ($orders as $order) {
         </button>
     </form>
     
-    <!-- Orders List -->
+    <!-- Orders List (เฉพาะของ user นี้) -->
     <?php if (empty($orders)): ?>
         <div class="empty-orders">
             <i class="fas fa-shopping-bag"></i>
@@ -1119,7 +1159,7 @@ function viewProductDetail(productId) {
 function viewOrderDetails(orderId) {
     currentOrderId = orderId;
     
-    // ดึงข้อมูลคำสั่งซื้อจาก server
+    // ดึงข้อมูลคำสั่งซื้อจาก server (ตรวจสอบว่าเป็นของ user นี้)
     fetch('get_order_details.php?id=' + orderId)
         .then(response => response.json())
         .then(data => {
