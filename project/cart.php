@@ -14,65 +14,88 @@ $page_title = 'ตะกร้าสินค้า';
 include 'includes/header.php';
 
 // ============================================
-// จัดการ POST Requests
+// จัดการ POST Requests (AJAX)
 // ============================================
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
+    // ปิด error reporting เพื่อป้องกัน output แทรก
+    error_reporting(0);
+    ini_set('display_errors', 0);
+    
+    // ล้าง output buffer ทั้งหมด
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
     header('Content-Type: application/json');
     
     try {
-        $action = $_POST['action'] ?? '';
+        $action = $_POST['action'];
         $response = ['success' => false, 'message' => ''];
         
-        // อัปเดตจำนวนสินค้า
-        if ($action == 'update_quantity') {
+        // ===== ลบสินค้าออกจากตะกร้า =====
+        if ($action == 'remove_item') {
+            $product_id = (int)$_POST['product_id'];
+            
+            // ตรวจสอบว่าสินค้าอยู่ในตะกร้าของผู้ใช้จริงหรือไม่
+            $cart_item = fetchOne("SELECT id FROM cart_items WHERE user_id = ? AND product_id = ?", 
+                                  [$user_id, $product_id]);
+            
+            if (!$cart_item) {
+                $response['message'] = 'ไม่พบสินค้าในตะกร้า';
+            } else {
+                // ลบสินค้า
+                $result = query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", 
+                               [$user_id, $product_id]);
+                
+                if ($result && $result->rowCount() > 0) {
+                    // นับจำนวนสินค้าที่เหลือ
+                    $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$user_id])['count'];
+                    
+                    $response['success'] = true;
+                    $response['message'] = 'ลบสินค้าเรียบร้อย';
+                    $response['cart_count'] = (int)$count;
+                } else {
+                    $response['message'] = 'ไม่สามารถลบสินค้าได้';
+                }
+            }
+        }
+        
+        // ===== อัปเดตจำนวนสินค้า =====
+        elseif ($action == 'update_quantity') {
             $product_id = (int)$_POST['product_id'];
             $quantity = (int)$_POST['quantity'];
             
             if ($quantity < 1) $quantity = 1;
             
-            // ตรวจสอบว่าสินค้าอยู่ในตะกร้าของผู้ใช้หรือไม่
-            $cart_item = fetchOne("SELECT ci.*, p.stock FROM cart_items ci 
-                                   JOIN products p ON ci.product_id = p.id 
-                                   WHERE ci.user_id = ? AND ci.product_id = ?", 
-                                   [$user_id, $product_id]);
+            // ตรวจสอบสต็อก
+            $product = fetchOne("SELECT p.stock FROM products p 
+                                JOIN cart_items ci ON p.id = ci.product_id 
+                                WHERE ci.user_id = ? AND ci.product_id = ?", 
+                                [$user_id, $product_id]);
             
-            if (!$cart_item) {
+            if (!$product) {
                 $response['message'] = 'ไม่พบสินค้าในตะกร้า';
-            } elseif ($quantity > $cart_item['stock']) {
-                $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $cart_item['stock'] . ' ชิ้น)';
+            } elseif ($quantity > $product['stock']) {
+                $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $product['stock'] . ' ชิ้น)';
             } else {
                 query("UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?", 
                       [$quantity, $user_id, $product_id]);
                 
-                // ดึงข้อมูลล่าสุดเพื่อคำนวณราคา
-                $updated_item = fetchOne("SELECT ci.*, p.price, p.shipping_fee 
-                                         FROM cart_items ci 
-                                         JOIN products p ON ci.product_id = p.id 
-                                         WHERE ci.user_id = ? AND ci.product_id = ?", 
-                                         [$user_id, $product_id]);
+                // ดึงราคาล่าสุด
+                $item = fetchOne("SELECT p.price, p.shipping_fee 
+                                 FROM cart_items ci 
+                                 JOIN products p ON ci.product_id = p.id 
+                                 WHERE ci.user_id = ? AND ci.product_id = ?", 
+                                 [$user_id, $product_id]);
                 
                 $response['success'] = true;
                 $response['message'] = 'อัปเดตจำนวนเรียบร้อย';
-                $response['item_price'] = $updated_item['price'] * $updated_item['quantity'];
-                $response['shipping_fee'] = $updated_item['shipping_fee'] ?? 0;
+                $response['item_price'] = $item['price'] * $quantity;
+                $response['shipping_fee'] = $item['shipping_fee'] ?? 0;
             }
         }
         
-        // ลบสินค้าออกจากตะกร้า
-        elseif ($action == 'remove_item') {
-            $product_id = (int)$_POST['product_id'];
-            
-            $result = query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", [$user_id, $product_id]);
-            
-            if ($result->rowCount() > 0) {
-                $response['success'] = true;
-                $response['message'] = 'ลบสินค้าเรียบร้อย';
-            } else {
-                $response['message'] = 'ไม่พบสินค้าที่ต้องการลบ';
-            }
-        }
-        
-        // เลือก/ไม่เลือกสินค้า
+        // ===== เลือก/ไม่เลือกสินค้า =====
         elseif ($action == 'toggle_item') {
             $product_id = (int)$_POST['product_id'];
             $selected = $_POST['selected'] === 'true' ? 1 : 0;
@@ -83,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $response['success'] = true;
         }
         
-        // เลือกทั้งหมด/ยกเลิกทั้งหมด
+        // ===== เลือกทั้งหมด/ยกเลิกทั้งหมด =====
         elseif ($action == 'toggle_all') {
             $selected = $_POST['selected'] === 'true' ? 1 : 0;
             
@@ -92,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $response['success'] = true;
         }
         
-        // เพิ่มไปยัง wishlist
+        // ===== เพิ่มไปยัง wishlist =====
         elseif ($action == 'add_to_wishlist') {
             $product_id = (int)$_POST['product_id'];
             
@@ -110,11 +133,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             $pdo->commit();
             
+            // นับจำนวนสินค้าที่เหลือ
+            $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$user_id])['count'];
+            
             $response['success'] = true;
             $response['message'] = 'ย้ายไปรายการที่ชอบเรียบร้อย';
+            $response['cart_count'] = (int)$count;
         }
         
-        // ดึงข้อมูลสรุปตะกร้า
+        // ===== ดึงข้อมูลสรุปตะกร้า =====
         elseif ($action == 'get_summary') {
             $items = fetchAll("SELECT ci.*, p.price, p.shipping_fee 
                               FROM cart_items ci 
@@ -136,22 +163,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             $response['success'] = true;
             $response['data'] = [
-                'subtotal' => $subtotal,
-                'shipping' => $shipping,
-                'total' => $subtotal + $shipping,
-                'selected_count' => $selected_count,
-                'total_items' => $total_items
+                'subtotal' => (float)$subtotal,
+                'shipping' => (float)$shipping,
+                'total' => (float)($subtotal + $shipping),
+                'selected_count' => (int)$selected_count,
+                'total_items' => (int)$total_items
             ];
         }
         
+        // ส่ง response
         echo json_encode($response);
         exit();
         
     } catch (Exception $e) {
-        if (isset($pdo)) {
+        if (isset($pdo) && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        echo json_encode(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
+        echo json_encode([
+            'success' => false, 
+            'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()
+        ]);
         exit();
     }
 }
@@ -427,10 +458,19 @@ $total = $subtotal + $total_shipping;
 }
 
 .toast {
-    min-width: 250px;
+    min-width: 300px;
     margin-bottom: 10px;
+    padding: 1rem;
+    border-radius: 8px;
+    color: white;
     animation: slideInRight 0.3s ease;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
+
+.toast-success { background: #10b981; }
+.toast-danger { background: #ef4444; }
+.toast-warning { background: #f59e0b; }
+.toast-info { background: #3b82f6; }
 
 @keyframes slideInRight {
     from {
@@ -440,6 +480,17 @@ $total = $subtotal + $total_shipping;
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
     }
 }
 
@@ -637,6 +688,7 @@ $total = $subtotal + $total_shipping;
 <script>
 let deleteProductId = null;
 let deleteModal;
+let isProcessing = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
@@ -647,14 +699,12 @@ function showToast(message, type = 'success') {
     const toastContainer = document.getElementById('toastContainer');
     
     const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type} border-0 show`;
-    toast.setAttribute('role', 'alert');
+    toast.className = `toast toast-${type}`;
     toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+        <div class="d-flex align-items-center">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
+            <div>${message}</div>
+            <button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
         </div>
     `;
     
@@ -662,13 +712,20 @@ function showToast(message, type = 'success') {
     
     setTimeout(() => {
         if (toast.parentElement) {
-            toast.remove();
+            toast.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 300);
         }
     }, 3000);
 }
 
 // อัปเดตจำนวนสินค้า
 function updateQuantity(productId, delta) {
+    if (isProcessing) return;
+    
     const input = document.getElementById('qty-' + productId);
     let currentQty = parseInt(input.value);
     let newQty = currentQty + delta;
@@ -683,7 +740,7 @@ function updateQuantity(productId, delta) {
         return;
     }
     
-    // แสดง loading
+    isProcessing = true;
     const item = document.getElementById('item-' + productId);
     item.classList.add('loading');
     
@@ -696,7 +753,9 @@ function updateQuantity(productId, delta) {
     })
     .then(response => response.json())
     .then(data => {
+        isProcessing = false;
         item.classList.remove('loading');
+        
         if (data.success) {
             input.value = newQty;
             
@@ -713,6 +772,7 @@ function updateQuantity(productId, delta) {
         }
     })
     .catch(error => {
+        isProcessing = false;
         item.classList.remove('loading');
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
         console.error('Error:', error);
@@ -721,15 +781,18 @@ function updateQuantity(productId, delta) {
 
 // ลบสินค้า
 function removeItem(productId) {
+    if (isProcessing) return;
     deleteProductId = productId;
     deleteModal.show();
 }
 
 document.getElementById('confirmDelete').addEventListener('click', function() {
-    if (!deleteProductId) return;
+    if (!deleteProductId || isProcessing) return;
     
+    isProcessing = true;
     const item = document.getElementById('item-' + deleteProductId);
     item.classList.add('loading');
+    deleteModal.hide();
     
     fetch('', {
         method: 'POST',
@@ -740,6 +803,8 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
     })
     .then(response => response.json())
     .then(data => {
+        isProcessing = false;
+        
         if (data.success) {
             // เพิ่ม animation ก่อนลบ
             item.style.animation = 'fadeOut 0.3s ease forwards';
@@ -752,12 +817,17 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
                     const remainingItems = document.querySelectorAll('.cart-item').length;
                     document.getElementById('cart-total-items').textContent = remainingItems;
                     
+                    // อัปเดตจำนวนบน navbar
+                    if (typeof updateCartCount === 'function') {
+                        updateCartCount();
+                    }
+                    
                     // ถ้าไม่มีสินค้าเหลือ ให้รีโหลดหน้า
                     if (remainingItems === 0) {
                         location.reload();
                     } else {
                         updateSummary();
-                        updateCartCount();
+                        updateSelectAll();
                     }
                 }
             }, 300);
@@ -769,16 +839,18 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
         }
     })
     .catch(error => {
+        isProcessing = false;
         item.classList.remove('loading');
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
         console.error('Error:', error);
     });
-    
-    deleteModal.hide();
 });
 
 // เลือก/ไม่เลือกสินค้า
 function toggleItem(productId, selected) {
+    if (isProcessing) return;
+    
+    isProcessing = true;
     const item = document.getElementById('item-' + productId);
     item.classList.add('loading');
     
@@ -791,13 +863,16 @@ function toggleItem(productId, selected) {
     })
     .then(response => response.json())
     .then(data => {
+        isProcessing = false;
         item.classList.remove('loading');
+        
         if (data.success) {
             updateSummary();
             updateSelectAll();
         }
     })
     .catch(error => {
+        isProcessing = false;
         item.classList.remove('loading');
         console.error('Error:', error);
     });
@@ -805,7 +880,10 @@ function toggleItem(productId, selected) {
 
 // เลือกทั้งหมด/ยกเลิกทั้งหมด
 function toggleAll(checkbox) {
+    if (isProcessing) return;
+    
     const selected = checkbox.checked;
+    isProcessing = true;
     
     // แสดง loading ทุกรายการ
     document.querySelectorAll('.cart-item').forEach(item => {
@@ -821,6 +899,8 @@ function toggleAll(checkbox) {
     })
     .then(response => response.json())
     .then(data => {
+        isProcessing = false;
+        
         document.querySelectorAll('.cart-item').forEach(item => {
             item.classList.remove('loading');
         });
@@ -833,6 +913,7 @@ function toggleAll(checkbox) {
         }
     })
     .catch(error => {
+        isProcessing = false;
         document.querySelectorAll('.cart-item').forEach(item => {
             item.classList.remove('loading');
         });
@@ -874,6 +955,9 @@ function updateSelectAll() {
 
 // เพิ่มไปยัง wishlist
 function addToWishlist(productId) {
+    if (isProcessing) return;
+    
+    isProcessing = true;
     const item = document.getElementById('item-' + productId);
     item.classList.add('loading');
     
@@ -886,6 +970,8 @@ function addToWishlist(productId) {
     })
     .then(response => response.json())
     .then(data => {
+        isProcessing = false;
+        
         if (data.success) {
             item.style.animation = 'fadeOut 0.3s ease forwards';
             
@@ -896,11 +982,15 @@ function addToWishlist(productId) {
                     const remainingItems = document.querySelectorAll('.cart-item').length;
                     document.getElementById('cart-total-items').textContent = remainingItems;
                     
+                    if (typeof updateCartCount === 'function') {
+                        updateCartCount();
+                    }
+                    
                     if (remainingItems === 0) {
                         location.reload();
                     } else {
                         updateSummary();
-                        updateCartCount();
+                        updateSelectAll();
                     }
                 }
             }, 300);
@@ -912,6 +1002,7 @@ function addToWishlist(productId) {
         }
     })
     .catch(error => {
+        isProcessing = false;
         item.classList.remove('loading');
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
         console.error('Error:', error);
