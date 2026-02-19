@@ -256,6 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
     cursor: pointer;
     transition: all 0.3s;
     height: 100%;
+    position: relative;
 }
 
 .address-card:hover {
@@ -268,9 +269,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
     background: #eff6ff;
 }
 
-.address-card .radio {
+.address-card input[type="radio"] {
     position: absolute;
     opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.address-card .radio-custom {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #cbd5e1;
+    border-radius: 50%;
+    background: white;
+}
+
+.address-card.selected .radio-custom {
+    border-color: #2563eb;
+    background: #2563eb;
+    box-shadow: inset 0 0 0 4px white;
 }
 
 .payment-method {
@@ -429,6 +449,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
     }
 }
 
+.address-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.no-address {
+    text-align: center;
+    padding: 2rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px dashed #cbd5e1;
+}
+
+.no-address i {
+    font-size: 3rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+}
+
 @media (max-width: 768px) {
     .checkout-steps {
         flex-direction: column;
@@ -516,18 +561,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                 
                 <!-- ที่อยู่จัดส่ง -->
                 <div class="card mb-4">
-                    <div class="card-header bg-white">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-map-marker-alt text-primary me-2"></i>
                             ที่อยู่จัดส่ง <span class="text-danger">*</span>
                         </h5>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddAddressModal()">
+                            <i class="fas fa-plus me-1"></i>เพิ่มที่อยู่ใหม่
+                        </button>
                     </div>
                     <div class="card-body">
                         <?php if (empty($addresses)): ?>
-                            <div class="text-center py-4">
-                                <i class="fas fa-map-marked-alt fa-3x text-muted mb-3"></i>
+                            <div class="no-address">
+                                <i class="fas fa-map-marked-alt"></i>
                                 <p class="mb-3">ยังไม่มีที่อยู่จัดส่ง กรุณาเพิ่มที่อยู่ก่อนดำเนินการสั่งซื้อ</p>
-                                <button type="button" class="btn btn-primary" onclick="showAddressModal()">
+                                <button type="button" class="btn btn-primary" onclick="showAddAddressModal()">
                                     <i class="fas fa-plus me-2"></i>เพิ่มที่อยู่ใหม่
                                 </button>
                             </div>
@@ -535,9 +583,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                             <div class="row g-3">
                                 <?php foreach ($addresses as $address): ?>
                                 <div class="col-md-6">
-                                    <label class="address-card w-100 position-relative">
+                                    <label class="address-card w-100 <?php echo $address['is_default'] ? 'selected' : ''; ?>">
                                         <input type="radio" name="address_id" value="<?php echo $address['id']; ?>" 
-                                               class="radio" <?php echo $address['is_default'] ? 'checked' : ''; ?> required>
+                                               <?php echo $address['is_default'] ? 'checked' : ''; ?> required>
+                                        <span class="radio-custom"></span>
                                         <div>
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <span class="fw-bold"><?php echo htmlspecialchars($address['address_name']); ?></span>
@@ -546,9 +595,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                                                 <?php endif; ?>
                                             </div>
                                             <div class="small">
-                                                <div><i class="fas fa-user me-1"></i><?php echo htmlspecialchars($address['recipient']); ?></div>
-                                                <div><i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($address['phone']); ?></div>
+                                                <div><i class="fas fa-user me-1 text-muted"></i><?php echo htmlspecialchars($address['recipient']); ?></div>
+                                                <div><i class="fas fa-phone me-1 text-muted"></i><?php echo htmlspecialchars($address['phone']); ?></div>
                                                 <div class="mt-1">
+                                                    <i class="fas fa-map-marker-alt me-1 text-muted"></i>
                                                     <?php echo htmlspecialchars($address['address']); ?><br>
                                                     <?php echo htmlspecialchars($address['district'] . ' ' . $address['city'] . ' ' . $address['province']); ?><br>
                                                     <?php echo htmlspecialchars($address['postcode']); ?>
@@ -558,11 +608,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                                     </label>
                                 </div>
                                 <?php endforeach; ?>
-                            </div>
-                            <div class="text-end mt-3">
-                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddressModal()">
-                                    <i class="fas fa-plus me-1"></i>เพิ่มที่อยู่ใหม่
-                                </button>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -579,8 +624,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="payment-method w-100">
-                                    <input type="radio" name="payment_method" value="bank_transfer" checked>
+                                <label class="payment-method w-100 <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] == 'bank_transfer') ? 'selected' : ''; ?>">
+                                    <input type="radio" name="payment_method" value="bank_transfer" <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] == 'bank_transfer') ? 'checked' : ''; ?>>
                                     <i class="fas fa-university fa-2x text-primary"></i>
                                     <div>
                                         <div class="fw-bold">โอนผ่านธนาคาร</div>
@@ -740,7 +785,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                    <button type="submit" class="btn btn-primary">บันทึกที่อยู่</button>
+                    <button type="submit" class="btn btn-primary" id="saveAddressBtn">บันทึกที่อยู่</button>
                 </div>
             </form>
         </div>
@@ -751,6 +796,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+// แสดง Toast notification
 function showToast(message, type = 'success') {
     const toastContainer = document.getElementById('toastContainer');
     
@@ -773,11 +819,13 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-function showAddressModal() {
-    const modal = new bootstrap.Modal(document.getElementById('addressModal'));
-    modal.show();
+// แสดง modal เพิ่มที่อยู่
+function showAddAddressModal() {
+    const addModal = new bootstrap.Modal(document.getElementById('addressModal'));
+    addModal.show();
 }
 
+// บันทึกที่อยู่ใหม่
 function saveAddress(event) {
     event.preventDefault();
     
@@ -785,7 +833,8 @@ function saveAddress(event) {
     const formData = new FormData(form);
     formData.append('action', 'add_address');
     
-    const submitBtn = form.querySelector('button[type="submit"]');
+    const submitBtn = document.getElementById('saveAddressBtn');
+    const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก...';
     
@@ -797,22 +846,29 @@ function saveAddress(event) {
     .then(data => {
         if (data.success) {
             showToast('เพิ่มที่อยู่เรียบร้อย', 'success');
+            
+            // ปิด modal
+            const addModal = bootstrap.Modal.getInstance(document.getElementById('addressModal'));
+            addModal.hide();
+            
+            // รีโหลดหน้าเพื่อแสดงที่อยู่ใหม่
             setTimeout(() => {
                 location.reload();
             }, 1500);
         } else {
             showToast(data.message || 'เกิดข้อผิดพลาด', 'danger');
             submitBtn.disabled = false;
-            submitBtn.innerHTML = 'บันทึกที่อยู่';
+            submitBtn.innerHTML = originalText;
         }
     })
     .catch(error => {
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
         submitBtn.disabled = false;
-        submitBtn.innerHTML = 'บันทึกที่อยู่';
+        submitBtn.innerHTML = originalText;
     });
 }
 
+// ตรวจสอบฟอร์มก่อนส่ง
 function validateForm() {
     // ตรวจสอบว่ามีที่อยู่หรือไม่
     <?php if (empty($addresses)): ?>
@@ -842,6 +898,15 @@ document.getElementById('checkoutForm')?.addEventListener('submit', function() {
     const btn = document.getElementById('placeOrderBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังดำเนินการ...';
+});
+
+// เลือกวิธีการชำระเงิน
+document.querySelectorAll('.payment-method').forEach(method => {
+    method.addEventListener('click', function() {
+        document.querySelectorAll('.payment-method').forEach(m => m.classList.remove('selected'));
+        this.classList.add('selected');
+        this.querySelector('input[type="radio"]').checked = true;
+    });
 });
 </script>
 
