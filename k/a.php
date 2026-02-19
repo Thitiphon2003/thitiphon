@@ -12,7 +12,7 @@
 
 <button onclick="showImage('2.jpg', this)" 
         style="background-color:orange; color:white; padding:10px; border:none;">
-    เปิดรูปที่ 2
+    เปิดรูปที่ 2 
 </button>
 
 <script>
