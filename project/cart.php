@@ -14,13 +14,13 @@ $page_title = 'ตะกร้าสินค้า';
 include 'includes/header.php';
 
 // ============================================
-// จัดการ AJAX Requests
+// จัดการ POST Requests
 // ============================================
-if (isset($_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     header('Content-Type: application/json');
     
     try {
-        $action = $_POST['action'];
+        $action = $_POST['action'] ?? '';
         $response = ['success' => false, 'message' => ''];
         
         // อัปเดตจำนวนสินค้า
@@ -30,52 +30,86 @@ if (isset($_POST['action'])) {
             
             if ($quantity < 1) $quantity = 1;
             
-            // ตรวจสอบสต็อก
-            $product = fetchOne("SELECT stock FROM products WHERE id = ?", [$product_id]);
-            if ($product && $quantity > $product['stock']) {
-                $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $product['stock'] . ' ชิ้น)';
+            // ตรวจสอบว่าสินค้าอยู่ในตะกร้าของผู้ใช้หรือไม่
+            $cart_item = fetchOne("SELECT ci.*, p.stock FROM cart_items ci 
+                                   JOIN products p ON ci.product_id = p.id 
+                                   WHERE ci.user_id = ? AND ci.product_id = ?", 
+                                   [$user_id, $product_id]);
+            
+            if (!$cart_item) {
+                $response['message'] = 'ไม่พบสินค้าในตะกร้า';
+            } elseif ($quantity > $cart_item['stock']) {
+                $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $cart_item['stock'] . ' ชิ้น)';
             } else {
                 query("UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?", 
                       [$quantity, $user_id, $product_id]);
+                
+                // ดึงข้อมูลล่าสุดเพื่อคำนวณราคา
+                $updated_item = fetchOne("SELECT ci.*, p.price, p.shipping_fee 
+                                         FROM cart_items ci 
+                                         JOIN products p ON ci.product_id = p.id 
+                                         WHERE ci.user_id = ? AND ci.product_id = ?", 
+                                         [$user_id, $product_id]);
+                
                 $response['success'] = true;
                 $response['message'] = 'อัปเดตจำนวนเรียบร้อย';
+                $response['item_price'] = $updated_item['price'] * $updated_item['quantity'];
+                $response['shipping_fee'] = $updated_item['shipping_fee'] ?? 0;
             }
         }
         
         // ลบสินค้าออกจากตะกร้า
         elseif ($action == 'remove_item') {
             $product_id = (int)$_POST['product_id'];
-            query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", [$user_id, $product_id]);
-            $response['success'] = true;
-            $response['message'] = 'ลบสินค้าเรียบร้อย';
+            
+            $result = query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", [$user_id, $product_id]);
+            
+            if ($result->rowCount() > 0) {
+                $response['success'] = true;
+                $response['message'] = 'ลบสินค้าเรียบร้อย';
+            } else {
+                $response['message'] = 'ไม่พบสินค้าที่ต้องการลบ';
+            }
         }
         
         // เลือก/ไม่เลือกสินค้า
         elseif ($action == 'toggle_item') {
             $product_id = (int)$_POST['product_id'];
             $selected = $_POST['selected'] === 'true' ? 1 : 0;
+            
             query("UPDATE cart_items SET selected = ? WHERE user_id = ? AND product_id = ?", 
                   [$selected, $user_id, $product_id]);
+            
             $response['success'] = true;
         }
         
         // เลือกทั้งหมด/ยกเลิกทั้งหมด
         elseif ($action == 'toggle_all') {
             $selected = $_POST['selected'] === 'true' ? 1 : 0;
+            
             query("UPDATE cart_items SET selected = ? WHERE user_id = ?", [$selected, $user_id]);
+            
             $response['success'] = true;
         }
         
         // เพิ่มไปยัง wishlist
         elseif ($action == 'add_to_wishlist') {
             $product_id = (int)$_POST['product_id'];
+            
+            // เริ่ม transaction
+            $pdo->beginTransaction();
+            
             // ตรวจสอบว่ามีใน wishlist แล้วหรือยัง
             $exists = fetchOne("SELECT id FROM wishlist WHERE user_id = ? AND product_id = ?", [$user_id, $product_id]);
             if (!$exists) {
                 query("INSERT INTO wishlist (user_id, product_id) VALUES (?, ?)", [$user_id, $product_id]);
             }
+            
             // ลบออกจากตะกร้า
             query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", [$user_id, $product_id]);
+            
+            $pdo->commit();
+            
             $response['success'] = true;
             $response['message'] = 'ย้ายไปรายการที่ชอบเรียบร้อย';
         }
@@ -90,6 +124,7 @@ if (isset($_POST['action'])) {
             $subtotal = 0;
             $shipping = 0;
             $selected_count = 0;
+            $total_items = count($items);
             
             foreach ($items as $item) {
                 if ($item['selected']) {
@@ -104,7 +139,8 @@ if (isset($_POST['action'])) {
                 'subtotal' => $subtotal,
                 'shipping' => $shipping,
                 'total' => $subtotal + $shipping,
-                'selected_count' => $selected_count
+                'selected_count' => $selected_count,
+                'total_items' => $total_items
             ];
         }
         
@@ -112,13 +148,16 @@ if (isset($_POST['action'])) {
         exit();
         
     } catch (Exception $e) {
+        if (isset($pdo)) {
+            $pdo->rollBack();
+        }
         echo json_encode(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
         exit();
     }
 }
 
 // ============================================
-// ดึงข้อมูลตะกร้าสินค้าจากฐานข้อมูล
+// ดึงข้อมูลตะกร้าสินค้าจากฐานข้อมูล (GET Request)
 // ============================================
 $cart_items = fetchAll("SELECT ci.*, p.name, p.price, p.original_price, p.stock, p.shipping_fee,
                                c.name as category_name, s.name as seller_name
@@ -322,10 +361,13 @@ $total = $subtotal + $total_shipping;
     left: 50%;
     width: 30px;
     height: 30px;
+    margin-left: -15px;
+    margin-top: -15px;
     border: 3px solid #e2e8f0;
     border-top-color: #2563eb;
     border-radius: 50%;
     animation: spin 1s linear infinite;
+    z-index: 10;
 }
 
 @keyframes spin {
@@ -377,6 +419,30 @@ $total = $subtotal + $total_shipping;
     height: 300px;
 }
 
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+
+.toast {
+    min-width: 250px;
+    margin-bottom: 10px;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
 @media (max-width: 768px) {
     .cart-item-image {
         width: 80px;
@@ -402,7 +468,7 @@ $total = $subtotal + $total_shipping;
             </div>
             <?php if (!empty($cart_items)): ?>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="selectAll" <?php echo $selected_count == count($cart_items) ? 'checked' : ''; ?> onchange="toggleAll(this)">
+                <input class="form-check-input" type="checkbox" id="selectAll" <?php echo $selected_count == count($cart_items) && $selected_count > 0 ? 'checked' : ''; ?> onchange="toggleAll(this)">
                 <label class="form-check-label" for="selectAll">
                     เลือกทั้งหมด
                 </label>
@@ -450,7 +516,7 @@ $total = $subtotal + $total_shipping;
                     </div>
                     
                     <?php foreach ($items as $item): ?>
-                    <div class="cart-item" id="item-<?php echo $item['product_id']; ?>" data-price="<?php echo $item['price']; ?>" data-shipping="<?php echo $item['shipping_fee'] ?? 0; ?>">
+                    <div class="cart-item" id="item-<?php echo $item['product_id']; ?>" data-product-id="<?php echo $item['product_id']; ?>">
                         <div class="row align-items-center">
                             <div class="col-auto">
                                 <div class="form-check">
@@ -489,7 +555,7 @@ $total = $subtotal + $total_shipping;
                             <div class="col-auto">
                                 <div class="text-end">
                                     <div class="mb-2">
-                                        <span class="fw-bold text-primary">฿<?php echo number_format($item['price']); ?></span>
+                                        <span class="fw-bold text-primary price-<?php echo $item['product_id']; ?>">฿<?php echo number_format($item['price']); ?></span>
                                         <?php if (!empty($item['original_price']) && $item['original_price'] > $item['price']): ?>
                                             <small class="text-muted text-decoration-line-through ms-2">฿<?php echo number_format($item['original_price']); ?></small>
                                         <?php endif; ?>
@@ -498,6 +564,9 @@ $total = $subtotal + $total_shipping;
                                         <button class="quantity-btn" onclick="updateQuantity(<?php echo $item['product_id']; ?>, -1)" <?php echo $item['quantity'] <= 1 ? 'disabled' : ''; ?>>-</button>
                                         <input type="text" class="quantity-input" id="qty-<?php echo $item['product_id']; ?>" value="<?php echo $item['quantity']; ?>" readonly>
                                         <button class="quantity-btn" onclick="updateQuantity(<?php echo $item['product_id']; ?>, 1)" <?php echo $item['quantity'] >= $item['stock'] ? 'disabled' : ''; ?>>+</button>
+                                    </div>
+                                    <div class="small text-muted mt-2 item-total-<?php echo $item['product_id']; ?>">
+                                        รวม: ฿<?php echo number_format($item['price'] * $item['quantity']); ?>
                                     </div>
                                 </div>
                             </div>
@@ -562,6 +631,9 @@ $total = $subtotal + $total_shipping;
     </div>
 </div>
 
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
 <script>
 let deleteProductId = null;
 let deleteModal;
@@ -569,6 +641,31 @@ let deleteModal;
 document.addEventListener('DOMContentLoaded', function() {
     deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
 });
+
+// แสดง Toast notification
+function showToast(message, type = 'success') {
+    const toastContainer = document.getElementById('toastContainer');
+    
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0 show`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 3000);
+}
 
 // อัปเดตจำนวนสินค้า
 function updateQuantity(productId, delta) {
@@ -582,7 +679,7 @@ function updateQuantity(productId, delta) {
     const stockEl = document.querySelector('.stock-' + productId);
     const maxStock = parseInt(stockEl.textContent);
     if (newQty > maxStock) {
-        showNotification('สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' + maxStock + ' ชิ้น)', 'warning');
+        showToast('สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' + maxStock + ' ชิ้น)', 'warning');
         return;
     }
     
@@ -602,15 +699,23 @@ function updateQuantity(productId, delta) {
         item.classList.remove('loading');
         if (data.success) {
             input.value = newQty;
+            
+            // อัปเดตราคารวมของสินค้านี้
+            const itemTotal = document.querySelector('.item-total-' + productId);
+            if (itemTotal) {
+                itemTotal.textContent = 'รวม: ฿' + data.item_price.toLocaleString();
+            }
+            
             updateSummary();
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
         } else {
-            showNotification(data.message, 'danger');
+            showToast(data.message, 'danger');
         }
     })
     .catch(error => {
         item.classList.remove('loading');
-        showNotification('เกิดข้อผิดพลาด', 'danger');
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
+        console.error('Error:', error);
     });
 }
 
@@ -636,27 +741,37 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // เพิ่ม animation ก่อนลบ
             item.style.animation = 'fadeOut 0.3s ease forwards';
+            
             setTimeout(() => {
-                item.remove();
-                updateSummary();
-                updateCartCount();
-                
-                // ตรวจสอบว่าตะกร้าว่างหรือยัง
-                const remainingItems = document.querySelectorAll('.cart-item').length;
-                if (remainingItems === 0) {
-                    location.reload();
+                if (item.parentElement) {
+                    item.remove();
+                    
+                    // อัปเดตจำนวนสินค้าในตะกร้า
+                    const remainingItems = document.querySelectorAll('.cart-item').length;
+                    document.getElementById('cart-total-items').textContent = remainingItems;
+                    
+                    // ถ้าไม่มีสินค้าเหลือ ให้รีโหลดหน้า
+                    if (remainingItems === 0) {
+                        location.reload();
+                    } else {
+                        updateSummary();
+                        updateCartCount();
+                    }
                 }
             }, 300);
-            showNotification(data.message, 'success');
+            
+            showToast(data.message, 'success');
         } else {
             item.classList.remove('loading');
-            showNotification(data.message, 'danger');
+            showToast(data.message, 'danger');
         }
     })
     .catch(error => {
         item.classList.remove('loading');
-        showNotification('เกิดข้อผิดพลาด', 'danger');
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
+        console.error('Error:', error);
     });
     
     deleteModal.hide();
@@ -664,6 +779,9 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
 
 // เลือก/ไม่เลือกสินค้า
 function toggleItem(productId, selected) {
+    const item = document.getElementById('item-' + productId);
+    item.classList.add('loading');
+    
     fetch('', {
         method: 'POST',
         headers: {
@@ -673,16 +791,26 @@ function toggleItem(productId, selected) {
     })
     .then(response => response.json())
     .then(data => {
+        item.classList.remove('loading');
         if (data.success) {
             updateSummary();
             updateSelectAll();
         }
+    })
+    .catch(error => {
+        item.classList.remove('loading');
+        console.error('Error:', error);
     });
 }
 
 // เลือกทั้งหมด/ยกเลิกทั้งหมด
 function toggleAll(checkbox) {
     const selected = checkbox.checked;
+    
+    // แสดง loading ทุกรายการ
+    document.querySelectorAll('.cart-item').forEach(item => {
+        item.classList.add('loading');
+    });
     
     fetch('', {
         method: 'POST',
@@ -693,12 +821,22 @@ function toggleAll(checkbox) {
     })
     .then(response => response.json())
     .then(data => {
+        document.querySelectorAll('.cart-item').forEach(item => {
+            item.classList.remove('loading');
+        });
+        
         if (data.success) {
             document.querySelectorAll('.item-checkbox').forEach(cb => {
                 cb.checked = selected;
             });
             updateSummary();
         }
+    })
+    .catch(error => {
+        document.querySelectorAll('.cart-item').forEach(item => {
+            item.classList.remove('loading');
+        });
+        console.error('Error:', error);
     });
 }
 
@@ -718,8 +856,10 @@ function updateSummary() {
             document.getElementById('subtotal').textContent = '฿' + data.data.subtotal.toLocaleString();
             document.getElementById('shipping').textContent = '฿' + data.data.shipping.toLocaleString();
             document.getElementById('total').textContent = '฿' + data.data.total.toLocaleString();
+            document.getElementById('cart-total-items').textContent = data.data.total_items;
         }
-    });
+    })
+    .catch(error => console.error('Error:', error));
 }
 
 // อัปเดต select all
@@ -748,21 +888,33 @@ function addToWishlist(productId) {
     .then(data => {
         if (data.success) {
             item.style.animation = 'fadeOut 0.3s ease forwards';
+            
             setTimeout(() => {
-                item.remove();
-                updateSummary();
-                updateCartCount();
-                
-                const remainingItems = document.querySelectorAll('.cart-item').length;
-                if (remainingItems === 0) {
-                    location.reload();
+                if (item.parentElement) {
+                    item.remove();
+                    
+                    const remainingItems = document.querySelectorAll('.cart-item').length;
+                    document.getElementById('cart-total-items').textContent = remainingItems;
+                    
+                    if (remainingItems === 0) {
+                        location.reload();
+                    } else {
+                        updateSummary();
+                        updateCartCount();
+                    }
                 }
             }, 300);
-            showNotification(data.message, 'success');
+            
+            showToast(data.message, 'success');
         } else {
             item.classList.remove('loading');
-            showNotification(data.message, 'danger');
+            showToast(data.message, 'danger');
         }
+    })
+    .catch(error => {
+        item.classList.remove('loading');
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
+        console.error('Error:', error);
     });
 }
 
@@ -770,52 +922,11 @@ function addToWishlist(productId) {
 function checkout() {
     const selectedItems = document.querySelectorAll('.item-checkbox:checked').length;
     if (selectedItems === 0) {
-        showNotification('กรุณาเลือกสินค้าที่ต้องการสั่งซื้อ', 'warning');
+        showToast('กรุณาเลือกสินค้าที่ต้องการสั่งซื้อ', 'warning');
         return;
     }
     
     window.location.href = 'checkout.php';
-}
-
-// แสดงการแจ้งเตือน
-function showNotification(message, type = 'success') {
-    const toastContainer = document.getElementById('toastContainer') || createToastContainer();
-    
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type} border-0`;
-    toast.setAttribute('role', 'alert');
-    toast.setAttribute('aria-live', 'assertive');
-    toast.setAttribute('aria-atomic', 'true');
-    
-    toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-    `;
-    
-    toastContainer.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-    
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
-}
-
-function createToastContainer() {
-    const container = document.createElement('div');
-    container.id = 'toastContainer';
-    container.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-    `;
-    document.body.appendChild(container);
-    return container;
 }
 </script>
 

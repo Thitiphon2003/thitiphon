@@ -6,11 +6,8 @@ header('Content-Type: application/json');
 
 $count = 0;
 if (isset($_SESSION['user_id'])) {
-    // ในระบบจริงจะ query จากตาราง cart_items
-    // $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$_SESSION['user_id']])['count'] ?? 0;
-    
-    // ตัวอย่าง
-    $count = 3;
+    $result = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$_SESSION['user_id']]);
+    $count = $result ? (int)$result['count'] : 0;
 }
 
 echo json_encode(['count' => $count]);

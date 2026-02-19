@@ -45,10 +45,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
             query("UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?", 
                     [$new_quantity, $user_id, $product_id]);
+            $message = 'อัปเดตจำนวนสินค้าในตะกร้าเรียบร้อย';
         } else {
             // เพิ่มใหม่
-            query("INSERT INTO cart_items (user_id, product_id, quantity) VALUES (?, ?, ?)", 
+            query("INSERT INTO cart_items (user_id, product_id, quantity, selected) VALUES (?, ?, ?, 1)", 
                     [$user_id, $product_id, $quantity]);
+            $message = 'เพิ่มสินค้าลงตะกร้าเรียบร้อย';
         }
         
         // นับจำนวนสินค้าในตะกร้า
@@ -56,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         echo json_encode([
             'success' => true,
-            'message' => 'เพิ่มสินค้าลงตะกร้าเรียบร้อย',
+            'message' => $message,
             'cart_count' => $count
         ]);
         
