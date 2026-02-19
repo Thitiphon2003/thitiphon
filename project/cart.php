@@ -32,66 +32,98 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $action = $_POST['action'];
         $response = ['success' => false, 'message' => ''];
         
-        // ===== ลบสินค้าออกจากตะกร้า =====
-        if ($action == 'remove_item') {
+        // ===== อัปเดตจำนวนสินค้า =====
+        if ($action == 'update_quantity') {
             $product_id = (int)$_POST['product_id'];
+            $change = (int)($_POST['change'] ?? 0);
             
-            // ตรวจสอบว่าสินค้าอยู่ในตะกร้าของผู้ใช้จริงหรือไม่
-            $cart_item = fetchOne("SELECT id FROM cart_items WHERE user_id = ? AND product_id = ?", 
+            // ตรวจสอบว่าสินค้าอยู่ในตะกร้าหรือไม่
+            $cart_item = fetchOne("SELECT ci.*, p.stock, p.price, p.shipping_fee 
+                                  FROM cart_items ci 
+                                  JOIN products p ON ci.product_id = p.id 
+                                  WHERE ci.user_id = ? AND ci.product_id = ?", 
                                   [$user_id, $product_id]);
             
             if (!$cart_item) {
                 $response['message'] = 'ไม่พบสินค้าในตะกร้า';
             } else {
-                // ลบสินค้า
-                $result = query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", 
-                               [$user_id, $product_id]);
+                $new_quantity = $cart_item['quantity'] + $change;
                 
-                if ($result && $result->rowCount() > 0) {
-                    // นับจำนวนสินค้าที่เหลือ
-                    $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$user_id])['count'];
+                // ตรวจสอบจำนวนขั้นต่ำ
+                if ($new_quantity < 1) {
+                    $response['message'] = 'ไม่สามารถลดจำนวนได้ต่ำกว่า 1';
+                }
+                // ตรวจสอบสต็อก
+                elseif ($new_quantity > $cart_item['stock']) {
+                    $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $cart_item['stock'] . ' ชิ้น)';
+                } else {
+                    // อัปเดตจำนวน
+                    query("UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?", 
+                          [$new_quantity, $user_id, $product_id]);
+                    
+                    // คำนวณราคาใหม่
+                    $item_total = $cart_item['price'] * $new_quantity;
                     
                     $response['success'] = true;
-                    $response['message'] = 'ลบสินค้าเรียบร้อย';
-                    $response['cart_count'] = (int)$count;
-                } else {
-                    $response['message'] = 'ไม่สามารถลบสินค้าได้';
+                    $response['message'] = 'อัปเดตจำนวนเรียบร้อย';
+                    $response['new_quantity'] = $new_quantity;
+                    $response['item_total'] = $item_total;
+                    $response['price'] = $cart_item['price'];
+                    $response['shipping_fee'] = $cart_item['shipping_fee'] ?? 0;
                 }
             }
         }
         
-        // ===== อัปเดตจำนวนสินค้า =====
-        elseif ($action == 'update_quantity') {
+        // ===== ตั้งค่าจำนวนโดยตรง =====
+        elseif ($action == 'set_quantity') {
             $product_id = (int)$_POST['product_id'];
-            $quantity = (int)$_POST['quantity'];
+            $new_quantity = (int)$_POST['quantity'];
             
-            if ($quantity < 1) $quantity = 1;
+            if ($new_quantity < 1) $new_quantity = 1;
             
-            // ตรวจสอบสต็อก
-            $product = fetchOne("SELECT p.stock FROM products p 
-                                JOIN cart_items ci ON p.id = ci.product_id 
-                                WHERE ci.user_id = ? AND ci.product_id = ?", 
-                                [$user_id, $product_id]);
+            // ตรวจสอบว่าสินค้าอยู่ในตะกร้าหรือไม่
+            $cart_item = fetchOne("SELECT ci.*, p.stock, p.price, p.shipping_fee 
+                                  FROM cart_items ci 
+                                  JOIN products p ON ci.product_id = p.id 
+                                  WHERE ci.user_id = ? AND ci.product_id = ?", 
+                                  [$user_id, $product_id]);
             
-            if (!$product) {
+            if (!$cart_item) {
                 $response['message'] = 'ไม่พบสินค้าในตะกร้า';
-            } elseif ($quantity > $product['stock']) {
-                $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $product['stock'] . ' ชิ้น)';
+            } elseif ($new_quantity > $cart_item['stock']) {
+                $response['message'] = 'สินค้ามีจำนวนไม่เพียงพอ (เหลือ ' . $cart_item['stock'] . ' ชิ้น)';
             } else {
+                // อัปเดตจำนวน
                 query("UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?", 
-                      [$quantity, $user_id, $product_id]);
+                      [$new_quantity, $user_id, $product_id]);
                 
-                // ดึงราคาล่าสุด
-                $item = fetchOne("SELECT p.price, p.shipping_fee 
-                                 FROM cart_items ci 
-                                 JOIN products p ON ci.product_id = p.id 
-                                 WHERE ci.user_id = ? AND ci.product_id = ?", 
-                                 [$user_id, $product_id]);
+                // คำนวณราคาใหม่
+                $item_total = $cart_item['price'] * $new_quantity;
                 
                 $response['success'] = true;
                 $response['message'] = 'อัปเดตจำนวนเรียบร้อย';
-                $response['item_price'] = $item['price'] * $quantity;
-                $response['shipping_fee'] = $item['shipping_fee'] ?? 0;
+                $response['new_quantity'] = $new_quantity;
+                $response['item_total'] = $item_total;
+                $response['price'] = $cart_item['price'];
+                $response['shipping_fee'] = $cart_item['shipping_fee'] ?? 0;
+            }
+        }
+        
+        // ===== ลบสินค้าออกจากตะกร้า =====
+        elseif ($action == 'remove_item') {
+            $product_id = (int)$_POST['product_id'];
+            
+            $result = query("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?", 
+                           [$user_id, $product_id]);
+            
+            if ($result && $result->rowCount() > 0) {
+                $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$user_id])['count'];
+                
+                $response['success'] = true;
+                $response['message'] = 'ลบสินค้าเรียบร้อย';
+                $response['cart_count'] = (int)$count;
+            } else {
+                $response['message'] = 'ไม่พบสินค้าที่ต้องการลบ';
             }
         }
         
@@ -133,7 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             
             $pdo->commit();
             
-            // นับจำนวนสินค้าที่เหลือ
             $count = fetchOne("SELECT COUNT(*) as count FROM cart_items WHERE user_id = ?", [$user_id])['count'];
             
             $response['success'] = true;
@@ -171,7 +202,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             ];
         }
         
-        // ส่ง response
         echo json_encode($response);
         exit();
         
@@ -289,6 +319,10 @@ $total = $subtotal + $total_shipping;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .quantity-btn:hover:not(:disabled) {
@@ -302,14 +336,15 @@ $total = $subtotal + $total_shipping;
 }
 
 .quantity-input {
-    width: 50px;
+    width: 60px;
     height: 36px;
     border: none;
     border-left: 1px solid #e2e8f0;
     border-right: 1px solid #e2e8f0;
     text-align: center;
-    font-weight: 500;
+    font-weight: 600;
     background: white;
+    font-size: 1rem;
 }
 
 .cart-summary {
@@ -353,6 +388,13 @@ $total = $subtotal + $total_shipping;
     margin-bottom: 1rem;
 }
 
+.item-total {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #2563eb;
+    margin-top: 0.5rem;
+}
+
 @keyframes slideIn {
     from {
         opacity: 0;
@@ -373,6 +415,16 @@ $total = $subtotal + $total_shipping;
         opacity: 0;
         transform: translateX(30px);
     }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.price-update {
+    animation: pulse 0.3s ease;
 }
 
 .item-removing {
@@ -460,7 +512,7 @@ $total = $subtotal + $total_shipping;
 .toast {
     min-width: 300px;
     margin-bottom: 10px;
-    padding: 1rem;
+    padding: 1rem 1.5rem;
     border-radius: 8px;
     color: white;
     animation: slideInRight 0.3s ease;
@@ -471,6 +523,10 @@ $total = $subtotal + $total_shipping;
 .toast-danger { background: #ef4444; }
 .toast-warning { background: #f59e0b; }
 .toast-info { background: #3b82f6; }
+
+.toast .btn-close {
+    filter: brightness(0) invert(1);
+}
 
 @keyframes slideInRight {
     from {
@@ -503,6 +559,10 @@ $total = $subtotal + $total_shipping;
     .cart-summary {
         position: static;
         margin-top: 2rem;
+    }
+    
+    .quantity-selector {
+        margin-top: 0.5rem;
     }
 }
 </style>
@@ -589,7 +649,7 @@ $total = $subtotal + $total_shipping;
                                 </div>
                             </div>
                             <div class="col">
-                                <h6 class="mb-1"><?php echo htmlspecialchars($item['name']); ?></h6>
+                                <h6 class="mb-1 fw-bold"><?php echo htmlspecialchars($item['name']); ?></h6>
                                 <div class="small text-muted mb-2">
                                     <span class="me-3"><i class="fas fa-tag me-1"></i><?php echo $item['category_name'] ?? 'ทั่วไป'; ?></span>
                                     <span><i class="fas fa-box me-1"></i>คงเหลือ <span class="stock-<?php echo $item['product_id']; ?>"><?php echo $item['stock']; ?></span> ชิ้น</span>
@@ -606,17 +666,17 @@ $total = $subtotal + $total_shipping;
                             <div class="col-auto">
                                 <div class="text-end">
                                     <div class="mb-2">
-                                        <span class="fw-bold text-primary price-<?php echo $item['product_id']; ?>">฿<?php echo number_format($item['price']); ?></span>
+                                        <span class="fw-bold text-primary h5 price-<?php echo $item['product_id']; ?>">฿<?php echo number_format($item['price']); ?></span>
                                         <?php if (!empty($item['original_price']) && $item['original_price'] > $item['price']): ?>
                                             <small class="text-muted text-decoration-line-through ms-2">฿<?php echo number_format($item['original_price']); ?></small>
                                         <?php endif; ?>
                                     </div>
                                     <div class="quantity-selector">
-                                        <button class="quantity-btn" onclick="updateQuantity(<?php echo $item['product_id']; ?>, -1)" <?php echo $item['quantity'] <= 1 ? 'disabled' : ''; ?>>-</button>
+                                        <button class="quantity-btn" onclick="updateQuantity(<?php echo $item['product_id']; ?>, -1)" <?php echo $item['quantity'] <= 1 ? 'disabled' : ''; ?>>−</button>
                                         <input type="text" class="quantity-input" id="qty-<?php echo $item['product_id']; ?>" value="<?php echo $item['quantity']; ?>" readonly>
                                         <button class="quantity-btn" onclick="updateQuantity(<?php echo $item['product_id']; ?>, 1)" <?php echo $item['quantity'] >= $item['stock'] ? 'disabled' : ''; ?>>+</button>
                                     </div>
-                                    <div class="small text-muted mt-2 item-total-<?php echo $item['product_id']; ?>">
+                                    <div class="item-total mt-2" id="total-<?php echo $item['product_id']; ?>">
                                         รวม: ฿<?php echo number_format($item['price'] * $item['quantity']); ?>
                                     </div>
                                 </div>
@@ -703,8 +763,8 @@ function showToast(message, type = 'success') {
     toast.innerHTML = `
         <div class="d-flex align-items-center">
             <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
-            <div>${message}</div>
-            <button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+            <div class="flex-grow-1">${message}</div>
+            <button type="button" class="btn-close btn-close-white" onclick="this.parentElement.parentElement.remove()"></button>
         </div>
     `;
     
@@ -723,14 +783,18 @@ function showToast(message, type = 'success') {
 }
 
 // อัปเดตจำนวนสินค้า
-function updateQuantity(productId, delta) {
+function updateQuantity(productId, change) {
     if (isProcessing) return;
     
     const input = document.getElementById('qty-' + productId);
     let currentQty = parseInt(input.value);
-    let newQty = currentQty + delta;
+    let newQty = currentQty + change;
     
-    if (newQty < 1) newQty = 1;
+    // ตรวจสอบขั้นต่ำ
+    if (newQty < 1) {
+        showToast('ไม่สามารถลดจำนวนได้ต่ำกว่า 1', 'warning');
+        return;
+    }
     
     // ตรวจสอบสต็อก
     const stockEl = document.querySelector('.stock-' + productId);
@@ -749,7 +813,7 @@ function updateQuantity(productId, delta) {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: 'action=update_quantity&product_id=' + productId + '&quantity=' + newQty
+        body: 'action=update_quantity&product_id=' + productId + '&change=' + change
     })
     .then(response => response.json())
     .then(data => {
@@ -757,14 +821,29 @@ function updateQuantity(productId, delta) {
         item.classList.remove('loading');
         
         if (data.success) {
-            input.value = newQty;
+            // อัปเดตจำนวนใน input
+            input.value = data.new_quantity;
             
             // อัปเดตราคารวมของสินค้านี้
-            const itemTotal = document.querySelector('.item-total-' + productId);
-            if (itemTotal) {
-                itemTotal.textContent = 'รวม: ฿' + data.item_price.toLocaleString();
+            const totalElement = document.getElementById('total-' + productId);
+            if (totalElement) {
+                totalElement.textContent = 'รวม: ฿' + data.item_total.toLocaleString();
+                totalElement.classList.add('price-update');
+                setTimeout(() => totalElement.classList.remove('price-update'), 300);
             }
             
+            // อัปเดตสถานะปุ่ม
+            const decreaseBtn = item.querySelector('.quantity-btn:first-child');
+            const increaseBtn = item.querySelector('.quantity-btn:last-child');
+            
+            if (decreaseBtn) {
+                decreaseBtn.disabled = data.new_quantity <= 1;
+            }
+            if (increaseBtn) {
+                increaseBtn.disabled = data.new_quantity >= maxStock;
+            }
+            
+            // อัปเดตสรุป
             updateSummary();
             showToast(data.message, 'success');
         } else {
