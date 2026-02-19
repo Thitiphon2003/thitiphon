@@ -14,7 +14,7 @@ $page_title = 'ชำระเงิน';
 include 'includes/header.php';
 
 // ============================================
-// ดึงข้อมูลตะกร้าสินค้า
+// ดึงข้อมูลตะกร้าสินค้าที่เลือกไว้
 // ============================================
 $cart_items = fetchAll("SELECT ci.*, p.name, p.price, p.shipping_fee, p.stock,
                                c.name as category_name, s.name as seller_name
@@ -26,6 +26,7 @@ $cart_items = fetchAll("SELECT ci.*, p.name, p.price, p.shipping_fee, p.stock,
                         ORDER BY ci.created_at DESC", [$user_id]);
 
 if (empty($cart_items)) {
+    $_SESSION['error'] = 'กรุณาเลือกสินค้าที่ต้องการสั่งซื้อ';
     header('Location: cart.php');
     exit();
 }
@@ -136,7 +137,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
         query("DELETE FROM cart_items WHERE user_id = ? AND selected = 1", [$user_id]);
         
         $pdo->commit();
-        $order_success = true;
+        
+        // เก็บข้อความสำเร็จใน session
+        $_SESSION['order_success'] = true;
+        $_SESSION['order_number'] = $order_number;
+        
+        // redirect ไปหน้าคำสั่งซื้อ
+        header('Location: orders.php?order_success=1&order=' . $order_number);
+        exit();
         
     } catch (Exception $e) {
         $pdo->rollBack();
@@ -470,264 +478,240 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['place_order'])) {
 </style>
 
 <div class="container checkout-container">
-    <?php if ($order_success): ?>
-        <!-- หน้าสำเร็จ -->
-        <div class="success-container">
-            <div class="success-icon">
-                <i class="fas fa-check"></i>
-            </div>
-            <h2 class="mb-3">สั่งซื้อสำเร็จ!</h2>
-            <p class="text-muted mb-4">ขอบคุณสำหรับการสั่งซื้อ ทางร้านจะดำเนินการจัดส่งให้โดยเร็ว</p>
-            
-            <div class="order-number">
-                หมายเลขคำสั่งซื้อ: <?php echo $order_number; ?>
-            </div>
-            
-            <div class="mt-4">
-                <a href="orders.php" class="btn btn-primary me-2">
-                    <i class="fas fa-shopping-bag me-2"></i>ดูคำสั่งซื้อของฉัน
-                </a>
-                <a href="index.php" class="btn btn-outline-secondary">
-                    <i class="fas fa-home me-2"></i>กลับหน้าหลัก
-                </a>
-            </div>
+    <!-- ขั้นตอนการชำระเงิน -->
+    <div class="checkout-steps">
+        <div class="step completed">
+            <div class="step-number">✓</div>
+            <div class="step-label">ตรวจสอบสินค้า</div>
         </div>
-    <?php else: ?>
-        <!-- ขั้นตอนการชำระเงิน -->
-        <div class="checkout-steps">
-            <div class="step active">
-                <div class="step-number">1</div>
-                <div class="step-label">ตรวจสอบสินค้า</div>
-            </div>
-            <div class="step">
-                <div class="step-number">2</div>
-                <div class="step-label">ข้อมูลจัดส่ง</div>
-            </div>
-            <div class="step">
-                <div class="step-number">3</div>
-                <div class="step-label">ชำระเงิน</div>
-            </div>
-            <div class="step">
-                <div class="step-number">4</div>
-                <div class="step-label">เสร็จสิ้น</div>
-            </div>
+        <div class="step active">
+            <div class="step-number">2</div>
+            <div class="step-label">ข้อมูลจัดส่ง</div>
         </div>
-        
-        <?php if ($error_message): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fas fa-exclamation-circle me-2"></i>
-                <?php echo $error_message; ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
-        
-        <div class="row">
-            <!-- ฟอร์มชำระเงิน -->
-            <div class="col-lg-8">
-                <form method="POST" id="checkoutForm">
-                    <!-- รายการสินค้า -->
-                    <div class="card mb-4">
-                        <div class="card-header bg-white">
-                            <h5 class="mb-0">
-                                <i class="fas fa-box text-primary me-2"></i>
-                                รายการสินค้า (<?php echo $items_count; ?> รายการ)
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <?php foreach ($cart_items as $item): ?>
-                            <div class="order-item">
-                                <div class="order-item-image">
-                                    <?php 
-                                    $image_path = "uploads/products/" . $item['product_id'] . ".jpg";
-                                    if (file_exists($image_path)): ?>
-                                        <img src="<?php echo $image_path . '?t=' . time(); ?>" alt="<?php echo $item['name']; ?>">
-                                    <?php else: ?>
-                                        <img src="https://via.placeholder.com/60x60?text=Product" alt="Product">
-                                    <?php endif; ?>
-                                </div>
-                                <div class="order-item-details">
-                                    <div class="order-item-name"><?php echo htmlspecialchars($item['name']); ?></div>
-                                    <div class="order-item-meta">
-                                        <span class="me-3"><?php echo $item['category_name'] ?? 'ทั่วไป'; ?></span>
-                                        <span>x<?php echo $item['quantity']; ?></span>
-                                    </div>
-                                </div>
-                                <div class="order-item-price">
-                                    ฿<?php echo number_format($item['price'] * $item['quantity']); ?>
+        <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-label">ชำระเงิน</div>
+        </div>
+        <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-label">เสร็จสิ้น</div>
+        </div>
+    </div>
+    
+    <?php if ($error_message): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            <?php echo $error_message; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+    
+    <div class="row">
+        <!-- ฟอร์มชำระเงิน -->
+        <div class="col-lg-8">
+            <form method="POST" id="checkoutForm">
+                <!-- รายการสินค้า -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-box text-primary me-2"></i>
+                            รายการสินค้า (<?php echo $items_count; ?> รายการ)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <?php foreach ($cart_items as $item): ?>
+                        <div class="order-item">
+                            <div class="order-item-image">
+                                <?php 
+                                $image_path = "uploads/products/" . $item['product_id'] . ".jpg";
+                                if (file_exists($image_path)): ?>
+                                    <img src="<?php echo $image_path . '?t=' . time(); ?>" alt="<?php echo $item['name']; ?>">
+                                <?php else: ?>
+                                    <img src="https://via.placeholder.com/60x60?text=Product" alt="Product">
+                                <?php endif; ?>
+                            </div>
+                            <div class="order-item-details">
+                                <div class="order-item-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                                <div class="order-item-meta">
+                                    <span class="me-3"><?php echo $item['category_name'] ?? 'ทั่วไป'; ?></span>
+                                    <span>x<?php echo $item['quantity']; ?></span>
                                 </div>
                             </div>
-                            <?php endforeach; ?>
+                            <div class="order-item-price">
+                                ฿<?php echo number_format($item['price'] * $item['quantity']); ?>
+                            </div>
                         </div>
+                        <?php endforeach; ?>
                     </div>
-                    
-                    <!-- ที่อยู่จัดส่ง -->
-                    <div class="card mb-4">
-                        <div class="card-header bg-white">
-                            <h5 class="mb-0">
-                                <i class="fas fa-map-marker-alt text-primary me-2"></i>
-                                ที่อยู่จัดส่ง
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <?php if (empty($addresses)): ?>
-                                <div class="text-center py-4">
-                                    <i class="fas fa-map-marked-alt fa-3x text-muted mb-3"></i>
-                                    <p class="mb-3">ยังไม่มีที่อยู่จัดส่ง กรุณาเพิ่มที่อยู่ก่อนดำเนินการสั่งซื้อ</p>
-                                    <button type="button" class="btn btn-primary" onclick="showAddressModal()">
-                                        <i class="fas fa-plus me-2"></i>เพิ่มที่อยู่ใหม่
-                                    </button>
-                                </div>
-                            <?php else: ?>
-                                <div class="row g-3">
-                                    <?php foreach ($addresses as $address): ?>
-                                    <div class="col-md-6">
-                                        <label class="address-card w-100 position-relative">
-                                            <input type="radio" name="address_id" value="<?php echo $address['id']; ?>" 
-                                                   class="radio" <?php echo $address['is_default'] ? 'checked' : ''; ?> required>
-                                            <div>
-                                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                                    <span class="fw-bold"><?php echo htmlspecialchars($address['address_name']); ?></span>
-                                                    <?php if ($address['is_default']): ?>
-                                                        <span class="badge bg-primary">ค่าเริ่มต้น</span>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <div class="small">
-                                                    <div><i class="fas fa-user me-1"></i><?php echo htmlspecialchars($address['recipient']); ?></div>
-                                                    <div><i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($address['phone']); ?></div>
-                                                    <div class="mt-1">
-                                                        <?php echo htmlspecialchars($address['address']); ?><br>
-                                                        <?php echo htmlspecialchars($address['district'] . ' ' . $address['city'] . ' ' . $address['province']); ?><br>
-                                                        <?php echo htmlspecialchars($address['postcode']); ?>
-                                                    </div>
+                </div>
+                
+                <!-- ที่อยู่จัดส่ง -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                            ที่อยู่จัดส่ง
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <?php if (empty($addresses)): ?>
+                            <div class="text-center py-4">
+                                <i class="fas fa-map-marked-alt fa-3x text-muted mb-3"></i>
+                                <p class="mb-3">ยังไม่มีที่อยู่จัดส่ง กรุณาเพิ่มที่อยู่ก่อนดำเนินการสั่งซื้อ</p>
+                                <button type="button" class="btn btn-primary" onclick="showAddressModal()">
+                                    <i class="fas fa-plus me-2"></i>เพิ่มที่อยู่ใหม่
+                                </button>
+                            </div>
+                        <?php else: ?>
+                            <div class="row g-3">
+                                <?php foreach ($addresses as $address): ?>
+                                <div class="col-md-6">
+                                    <label class="address-card w-100 position-relative">
+                                        <input type="radio" name="address_id" value="<?php echo $address['id']; ?>" 
+                                               class="radio" <?php echo $address['is_default'] ? 'checked' : ''; ?> required>
+                                        <div>
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <span class="fw-bold"><?php echo htmlspecialchars($address['address_name']); ?></span>
+                                                <?php if ($address['is_default']): ?>
+                                                    <span class="badge bg-primary">ค่าเริ่มต้น</span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="small">
+                                                <div><i class="fas fa-user me-1"></i><?php echo htmlspecialchars($address['recipient']); ?></div>
+                                                <div><i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($address['phone']); ?></div>
+                                                <div class="mt-1">
+                                                    <?php echo htmlspecialchars($address['address']); ?><br>
+                                                    <?php echo htmlspecialchars($address['district'] . ' ' . $address['city'] . ' ' . $address['province']); ?><br>
+                                                    <?php echo htmlspecialchars($address['postcode']); ?>
                                                 </div>
                                             </div>
-                                        </label>
-                                    </div>
-                                    <?php endforeach; ?>
+                                        </div>
+                                    </label>
                                 </div>
-                                <div class="text-end mt-3">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddressModal()">
-                                        <i class="fas fa-plus me-1"></i>เพิ่มที่อยู่ใหม่
-                                    </button>
-                                </div>
-                            <?php endif; ?>
-                        </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="text-end mt-3">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddressModal()">
+                                    <i class="fas fa-plus me-1"></i>เพิ่มที่อยู่ใหม่
+                                </button>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    
-                    <!-- วิธีการชำระเงิน -->
-                    <div class="card mb-4">
-                        <div class="card-header bg-white">
-                            <h5 class="mb-0">
-                                <i class="fas fa-credit-card text-primary me-2"></i>
-                                วิธีการชำระเงิน
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="payment-method w-100">
-                                        <input type="radio" name="payment_method" value="bank_transfer" checked>
-                                        <i class="fas fa-university fa-2x text-primary"></i>
-                                        <div>
-                                            <div class="fw-bold">โอนผ่านธนาคาร</div>
-                                            <small class="text-muted">ธ.กรุงเทพ / กสิกรไทย / ไทยพาณิชย์</small>
-                                        </div>
-                                    </label>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="payment-method w-100">
-                                        <input type="radio" name="payment_method" value="credit_card">
-                                        <i class="fas fa-credit-card fa-2x text-primary"></i>
-                                        <div>
-                                            <div class="fw-bold">บัตรเครดิต/เดบิต</div>
-                                            <small class="text-muted">Visa / Mastercard / JCB</small>
-                                        </div>
-                                    </label>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="payment-method w-100">
-                                        <input type="radio" name="payment_method" value="promptpay">
-                                        <i class="fas fa-mobile-alt fa-2x text-primary"></i>
-                                        <div>
-                                            <div class="fw-bold">พร้อมเพย์</div>
-                                            <small class="text-muted">สแกน QR Code เพื่อชำระเงิน</small>
-                                        </div>
-                                    </label>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="payment-method w-100">
-                                        <input type="radio" name="payment_method" value="cod">
-                                        <i class="fas fa-truck fa-2x text-primary"></i>
-                                        <div>
-                                            <div class="fw-bold">เก็บเงินปลายทาง</div>
-                                            <small class="text-muted">ชำระเงินเมื่อได้รับสินค้า</small>
-                                        </div>
-                                    </label>
-                                </div>
+                </div>
+                
+                <!-- วิธีการชำระเงิน -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-credit-card text-primary me-2"></i>
+                            วิธีการชำระเงิน
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="payment-method w-100">
+                                    <input type="radio" name="payment_method" value="bank_transfer" checked>
+                                    <i class="fas fa-university fa-2x text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold">โอนผ่านธนาคาร</div>
+                                        <small class="text-muted">ธ.กรุงเทพ / กสิกรไทย / ไทยพาณิชย์</small>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="payment-method w-100">
+                                    <input type="radio" name="payment_method" value="credit_card">
+                                    <i class="fas fa-credit-card fa-2x text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold">บัตรเครดิต/เดบิต</div>
+                                        <small class="text-muted">Visa / Mastercard / JCB</small>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="payment-method w-100">
+                                    <input type="radio" name="payment_method" value="promptpay">
+                                    <i class="fas fa-mobile-alt fa-2x text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold">พร้อมเพย์</div>
+                                        <small class="text-muted">สแกน QR Code เพื่อชำระเงิน</small>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="payment-method w-100">
+                                    <input type="radio" name="payment_method" value="cod">
+                                    <i class="fas fa-truck fa-2x text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold">เก็บเงินปลายทาง</div>
+                                        <small class="text-muted">ชำระเงินเมื่อได้รับสินค้า</small>
+                                    </div>
+                                </label>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- หมายเหตุ -->
-                    <div class="card mb-4">
-                        <div class="card-header bg-white">
-                            <h5 class="mb-0">
-                                <i class="fas fa-pen text-primary me-2"></i>
-                                หมายเหตุ (ถ้ามี)
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <textarea class="form-control" name="notes" rows="3" placeholder="ระบุข้อความเพิ่มเติม..."></textarea>
-                        </div>
+                </div>
+                
+                <!-- หมายเหตุ -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-pen text-primary me-2"></i>
+                            หมายเหตุ (ถ้ามี)
+                        </h5>
                     </div>
-                    
-                    <!-- ปุ่มดำเนินการ -->
-                    <div class="d-flex justify-content-between">
-                        <a href="cart.php" class="btn btn-outline-secondary">
-                            <i class="fas fa-arrow-left me-2"></i>กลับไปตะกร้าสินค้า
-                        </a>
-                        <button type="submit" name="place_order" class="btn btn-primary btn-lg" id="placeOrderBtn">
-                            <i class="fas fa-check-circle me-2"></i>ยืนยันคำสั่งซื้อ
-                        </button>
+                    <div class="card-body">
+                        <textarea class="form-control" name="notes" rows="3" placeholder="ระบุข้อความเพิ่มเติม..."></textarea>
                     </div>
-                </form>
-            </div>
-            
-            <!-- สรุปคำสั่งซื้อ -->
-            <div class="col-lg-4">
-                <div class="order-summary">
-                    <h5 class="mb-4">สรุปคำสั่งซื้อ</h5>
-                    
-                    <div class="summary-row">
-                        <span>ราคาสินค้า (<?php echo $items_count; ?> รายการ)</span>
-                        <span class="fw-bold">฿<?php echo number_format($subtotal); ?></span>
+                </div>
+                
+                <!-- ปุ่มดำเนินการ -->
+                <div class="d-flex justify-content-between">
+                    <a href="cart.php" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>กลับไปตะกร้าสินค้า
+                    </a>
+                    <button type="submit" name="place_order" class="btn btn-primary btn-lg" id="placeOrderBtn">
+                        <i class="fas fa-check-circle me-2"></i>ยืนยันคำสั่งซื้อ
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- สรุปคำสั่งซื้อ -->
+        <div class="col-lg-4">
+            <div class="order-summary">
+                <h5 class="mb-4">สรุปคำสั่งซื้อ</h5>
+                
+                <div class="summary-row">
+                    <span>ราคาสินค้า (<?php echo $items_count; ?> รายการ)</span>
+                    <span class="fw-bold">฿<?php echo number_format($subtotal); ?></span>
+                </div>
+                <div class="summary-row">
+                    <span>ค่าจัดส่ง</span>
+                    <span class="fw-bold">฿<?php echo number_format($total_shipping); ?></span>
+                </div>
+                
+                <div class="summary-row total">
+                    <span>ยอดสุทธิ</span>
+                    <span>฿<?php echo number_format($total); ?></span>
+                </div>
+                
+                <div class="mt-4 p-3 bg-light rounded">
+                    <div class="d-flex align-items-center gap-2 text-success mb-2">
+                        <i class="fas fa-shield-alt"></i>
+                        <small class="fw-bold">ซื้ออย่างปลอดภัย</small>
                     </div>
-                    <div class="summary-row">
-                        <span>ค่าจัดส่ง</span>
-                        <span class="fw-bold">฿<?php echo number_format($total_shipping); ?></span>
-                    </div>
-                    
-                    <div class="summary-row total">
-                        <span>ยอดสุทธิ</span>
-                        <span>฿<?php echo number_format($total); ?></span>
-                    </div>
-                    
-                    <div class="mt-4 p-3 bg-light rounded">
-                        <div class="d-flex align-items-center gap-2 text-success mb-2">
-                            <i class="fas fa-shield-alt"></i>
-                            <small class="fw-bold">ซื้ออย่างปลอดภัย</small>
-                        </div>
-                        <small class="text-muted d-block mb-1">
-                            <i class="fas fa-check-circle me-1"></i>ข้อมูลถูกเข้ารหัส
-                        </small>
-                        <small class="text-muted d-block">
-                            <i class="fas fa-check-circle me-1"></i>รับประกันคืนสินค้า 7 วัน
-                        </small>
-                    </div>
+                    <small class="text-muted d-block mb-1">
+                        <i class="fas fa-check-circle me-1"></i>ข้อมูลถูกเข้ารหัส
+                    </small>
+                    <small class="text-muted d-block">
+                        <i class="fas fa-check-circle me-1"></i>รับประกันคืนสินค้า 7 วัน
+                    </small>
                 </div>
             </div>
         </div>
-    <?php endif; ?>
+    </div>
 </div>
 
 <!-- Modal เพิ่มที่อยู่ -->

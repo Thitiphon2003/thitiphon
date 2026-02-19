@@ -13,6 +13,11 @@ $user_id = $_SESSION['user_id'];
 $page_title = 'คำสั่งซื้อของฉัน';
 include 'includes/header.php';
 
+// แสดงข้อความสำเร็จจากการสั่งซื้อ
+if (isset($_GET['order_success']) && isset($_GET['order'])) {
+    $success_message = 'สั่งซื้อสำเร็จ! หมายเลขคำสั่งซื้อ: ' . htmlspecialchars($_GET['order']);
+}
+
 // ============================================
 // ดึงข้อมูลสรุปคำสั่งซื้อ
 // ============================================
@@ -20,6 +25,7 @@ $summary = fetchOne("SELECT
     COUNT(*) as total_orders,
     COALESCE(SUM(total), 0) as total_spent,
     SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END) as pending_orders,
+    SUM(CASE WHEN order_status = 'processing' THEN 1 ELSE 0 END) as processing_orders,
     SUM(CASE WHEN order_status = 'shipping' THEN 1 ELSE 0 END) as shipping_orders,
     SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) as delivered_orders,
     SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_orders
@@ -62,6 +68,19 @@ $order_items = [];
 foreach ($orders as $order) {
     $items = fetchAll("SELECT * FROM order_items WHERE order_id = ?", [$order['id']]);
     $order_items[$order['id']] = $items;
+}
+
+// ============================================
+// ดึงข้อมูลที่อยู่สำหรับแต่ละคำสั่งซื้อ
+// ============================================
+$order_addresses = [];
+foreach ($orders as $order) {
+    if ($order['address_id']) {
+        $address = fetchOne("SELECT * FROM user_addresses WHERE id = ?", [$order['address_id']]);
+        if ($address) {
+            $order_addresses[$order['id']] = $address;
+        }
+    }
 }
 ?>
 
@@ -242,6 +261,8 @@ foreach ($orders as $order) {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
 .order-number {
@@ -328,6 +349,15 @@ foreach ($orders as $order) {
     gap: 1rem;
     padding: 1rem 0;
     border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.order-product:hover {
+    background: #f8fafc;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    border-radius: 8px;
 }
 
 .order-product:last-child {
@@ -414,6 +444,7 @@ foreach ($orders as $order) {
 .order-actions {
     display: flex;
     gap: 0.8rem;
+    flex-wrap: wrap;
 }
 
 .order-actions button,
@@ -562,6 +593,40 @@ foreach ($orders as $order) {
     text-decoration: underline;
 }
 
+/* Address Info */
+.address-info {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.address-info i {
+    color: #2563eb;
+    width: 20px;
+}
+
+/* Modal Styles */
+.order-detail-item {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1rem 0;
+}
+
+.order-detail-item:last-child {
+    border-bottom: none;
+}
+
+.order-detail-label {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.order-detail-value {
+    font-weight: 500;
+}
+
 /* Animations */
 @keyframes slideIn {
     from {
@@ -572,32 +637,6 @@ foreach ($orders as $order) {
         opacity: 1;
         transform: translateX(0);
     }
-}
-
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-        transform: translateX(0);
-    }
-    to {
-        opacity: 0;
-        transform: translateX(30px);
-    }
-}
-
-/* Loading Spinner */
-.spinner {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-radius: 50%;
-    border-top-color: white;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
 }
 
 /* Toast Container */
@@ -707,7 +746,7 @@ foreach ($orders as $order) {
 
 <div class="container orders-container">
     <div class="orders-header">
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div>
                 <h1 class="h3 mb-2">
                     <i class="fas fa-shopping-bag text-primary me-2"></i>
@@ -720,6 +759,14 @@ foreach ($orders as $order) {
             </a>
         </div>
     </div>
+    
+    <?php if (isset($success_message)): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            <?php echo $success_message; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
     
     <!-- Stats Cards -->
     <div class="stats-grid">
@@ -749,7 +796,7 @@ foreach ($orders as $order) {
             </div>
             <div class="stat-info">
                 <h3>รอดำเนินการ</h3>
-                <div class="value"><?php echo number_format($summary['pending_orders']); ?></div>
+                <div class="value"><?php echo number_format($summary['pending_orders'] + $summary['processing_orders']); ?></div>
             </div>
         </div>
         
@@ -766,27 +813,32 @@ foreach ($orders as $order) {
     
     <!-- Filter Tabs -->
     <div class="filter-tabs">
-        <a href="?status=all" class="filter-tab <?php echo $status_filter == 'all' ? 'active' : ''; ?>">
+        <a href="?status=all<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="filter-tab <?php echo $status_filter == 'all' ? 'active' : ''; ?>">
             <i class="fas fa-list"></i>
             ทั้งหมด
             <span class="badge"><?php echo $summary['total_orders']; ?></span>
         </a>
-        <a href="?status=pending" class="filter-tab <?php echo $status_filter == 'pending' ? 'active' : ''; ?>">
+        <a href="?status=pending<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="filter-tab <?php echo $status_filter == 'pending' ? 'active' : ''; ?>">
             <i class="fas fa-clock"></i>
             รอดำเนินการ
             <span class="badge"><?php echo $summary['pending_orders']; ?></span>
         </a>
-        <a href="?status=shipping" class="filter-tab <?php echo $status_filter == 'shipping' ? 'active' : ''; ?>">
+        <a href="?status=processing<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="filter-tab <?php echo $status_filter == 'processing' ? 'active' : ''; ?>">
+            <i class="fas fa-cog"></i>
+            กำลังดำเนินการ
+            <span class="badge"><?php echo $summary['processing_orders']; ?></span>
+        </a>
+        <a href="?status=shipping<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="filter-tab <?php echo $status_filter == 'shipping' ? 'active' : ''; ?>">
             <i class="fas fa-truck"></i>
             กำลังจัดส่ง
             <span class="badge"><?php echo $summary['shipping_orders']; ?></span>
         </a>
-        <a href="?status=delivered" class="filter-tab <?php echo $status_filter == 'delivered' ? 'active' : ''; ?>">
+        <a href="?status=delivered<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="filter-tab <?php echo $status_filter == 'delivered' ? 'active' : ''; ?>">
             <i class="fas fa-check-circle"></i>
             จัดส่งแล้ว
             <span class="badge"><?php echo $summary['delivered_orders']; ?></span>
         </a>
-        <a href="?status=cancelled" class="filter-tab <?php echo $status_filter == 'cancelled' ? 'active' : ''; ?>">
+        <a href="?status=cancelled<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="filter-tab <?php echo $status_filter == 'cancelled' ? 'active' : ''; ?>">
             <i class="fas fa-times-circle"></i>
             ยกเลิก
             <span class="badge"><?php echo $summary['cancelled_orders']; ?></span>
@@ -795,7 +847,9 @@ foreach ($orders as $order) {
     
     <!-- Search Box -->
     <form method="GET" class="search-box">
-        <input type="hidden" name="status" value="<?php echo $status_filter; ?>">
+        <?php if ($status_filter != 'all'): ?>
+            <input type="hidden" name="status" value="<?php echo $status_filter; ?>">
+        <?php endif; ?>
         <input type="text" name="search" placeholder="ค้นหาด้วยเลขที่คำสั่งซื้อ หรือชื่อสินค้า..." value="<?php echo htmlspecialchars($search); ?>">
         <button type="submit">
             <i class="fas fa-search me-2"></i>ค้นหา
@@ -814,7 +868,10 @@ foreach ($orders as $order) {
         </div>
     <?php else: ?>
         <?php foreach ($orders as $order): ?>
-            <?php $items = $order_items[$order['id']] ?? []; ?>
+            <?php 
+            $items = $order_items[$order['id']] ?? [];
+            $address = $order_addresses[$order['id']] ?? null;
+            ?>
             <div class="order-card">
                 <div class="order-header">
                     <div class="order-number">
@@ -873,11 +930,36 @@ foreach ($orders as $order) {
                         <?php endif; ?>
                     </div>
                     
+                    <!-- Address Info (ถ้ามี) -->
+                    <?php if ($address): ?>
+                    <div class="address-info">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-1">
+                                    <i class="fas fa-user me-2"></i>
+                                    <span><?php echo htmlspecialchars($address['recipient']); ?></span>
+                                </div>
+                                <div class="mb-1">
+                                    <i class="fas fa-phone me-2"></i>
+                                    <span><?php echo htmlspecialchars($address['phone']); ?></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div>
+                                    <i class="fas fa-map-marker-alt me-2"></i>
+                                    <span><?php echo htmlspecialchars($address['address']); ?><br>
+                                    <?php echo htmlspecialchars($address['district'] . ' ' . $address['city'] . ' ' . $address['province'] . ' ' . $address['postcode']); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
                     <!-- Products -->
                     <?php if (!empty($items)): ?>
                         <div class="order-products">
                             <?php foreach ($items as $item): ?>
-                                <div class="order-product">
+                                <div class="order-product" onclick="viewProductDetail(<?php echo $item['product_id']; ?>)">
                                     <div class="product-image">
                                         <?php 
                                         $image_path = "uploads/products/" . $item['product_id'] . ".jpg";
@@ -914,11 +996,6 @@ foreach ($orders as $order) {
                                 <span class="tracking-courier">
                                     <i class="fas fa-truck"></i> <?php echo $order['courier'] ?? 'Kerry Express'; ?>
                                 </span>
-                                <?php if (!empty($order['estimated_delivery'])): ?>
-                                    <span class="tracking-estimate">
-                                        <i class="fas fa-clock"></i> คาดว่าถึง <?php echo date('d/m/Y', strtotime($order['estimated_delivery'])); ?>
-                                    </span>
-                                <?php endif; ?>
                             </div>
                             <a href="#" class="tracking-link" onclick="trackOrder('<?php echo $order['tracking_number']; ?>')">
                                 <i class="fas fa-external-link-alt"></i> ติดตามพัสดุ
@@ -941,7 +1018,7 @@ foreach ($orders as $order) {
                                 <button class="btn-secondary" onclick="buyAgain('<?php echo $order['id']; ?>')">
                                     <i class="fas fa-redo-alt"></i> สั่งซื้ออีกครั้ง
                                 </button>
-                            <?php elseif ($order['order_status'] == 'shipping'): ?>
+                            <?php elseif ($order['order_status'] == 'shipping' && !empty($order['tracking_number'])): ?>
                                 <button class="btn-track" onclick="trackOrder('<?php echo $order['tracking_number']; ?>')">
                                     <i class="fas fa-map-marker-alt"></i> ติดตามพัสดุ
                                 </button>
@@ -1051,6 +1128,11 @@ function showToast(message, type = 'success') {
             toast.remove();
         }
     }, 3000);
+}
+
+// ดูรายละเอียดสินค้า
+function viewProductDetail(productId) {
+    window.location.href = 'product_detail.php?id=' + productId;
 }
 
 // ดูรายละเอียดคำสั่งซื้อ
