@@ -6,30 +6,6 @@
 		$conn = mysqli_connect($host, $user, $pwd, $db) or die ("เชื่อมต่อฐานข้อมูลไม่ได้");
 		mysqli_query($conn, "SET NAMES utf8");
 
-// Check connection
-if ($conn->connect_error) {
-    die("<div style='background: #f8d7da; color: #721c24; padding: 1rem; margin: 1rem; border-radius: 5px; border-left: 4px solid #dc3545;'>
-            <strong>❌ การเชื่อมต่อฐานข้อมูลล้มเหลว!</strong><br>
-            Error: " . $conn->connect_error . "<br>
-            Host: " . $host . "<br>
-            User: " . $user . "<br>
-            Database: " . $db . "
-        </div>");
-}
-
-// Set charset to UTF-8
-if (!$conn->set_charset("utf8")) {
-    $conn->query("SET NAMES utf8");
-}
-
-// Success message (สามารถลบได้หลังจากทดสอบ)
-echo "<div style='background: #d4edda; color: #155724; padding: 1rem; margin: 1rem; border-radius: 5px; border-left: 4px solid #28a745;'>
-        <strong>✅ เชื่อมต่อฐานข้อมูลสำเร็จ!</strong><br>
-        Host: " . $host . "<br>
-        Database: " . $db . "<br>
-        Time: " . date('Y-m-d H:i:s') . "
-      </div>";
-
 // Function to test connection
 function testConnection($conn) {
     $test = $conn->query("SELECT 1");
