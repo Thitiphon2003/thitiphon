@@ -2,19 +2,10 @@
 session_start();
 
 // Database configuration for server 103.114.201.254
-define('DB_HOST', '103.114.201.254');
+define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', 'r669109');
-define('DB_NAME', '4140db');
-
-// Create connection
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-
-// Check connection
-if ($conn->connect_error) {
-    error_log("Connection failed: " . $conn->connect_error);
-    die("ระบบอยู่ระหว่างการปรับปรุง กรุณาลองใหม่อีกครั้งในภายหลัง");
-}
+define('DB_NAME', 'ecommerce_db');
 
 // Set charset
 $conn->set_charset("utf8");
