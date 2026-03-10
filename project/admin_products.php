@@ -26,6 +26,157 @@ $success_message = '';
 $error_message = '';
 
 // ============================================
+// ฟังก์ชันจัดการรูปภาพ (เฉพาะใน admin_products.php)
+// ============================================
+
+/**
+ * อัปโหลดรูปภาพสินค้า
+ */
+function uploadProductImage($file, $product_id, $is_primary = false) {
+    global $pdo;
+    
+    // ตรวจสอบว่ามีไฟล์หรือไม่
+    if (!isset($file) || $file['error'] != UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'ไม่มีไฟล์ที่อัปโหลด'];
+    }
+    
+    $upload_dir = "uploads/products/";
+    
+    // สร้างโฟลเดอร์ถ้ายังไม่มี
+    if (!file_exists($upload_dir)) {
+        if (!mkdir($upload_dir, 0777, true)) {
+            return ['success' => false, 'message' => 'ไม่สามารถสร้างโฟลเดอร์ uploads/products/ ได้'];
+        }
+    }
+    
+    // ตรวจสอบสิทธิ์การเขียน
+    if (!is_writable($upload_dir)) {
+        chmod($upload_dir, 0777);
+        if (!is_writable($upload_dir)) {
+            return ['success' => false, 'message' => 'โฟลเดอร์ uploads/products/ ไม่สามารถเขียนได้'];
+        }
+    }
+    
+    // ตรวจสอบข้อผิดพลาด
+    if ($file['error'] != UPLOAD_ERR_OK) {
+        $error_messages = [
+            UPLOAD_ERR_INI_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป (จำกัด ' . ini_get('upload_max_filesize') . ')',
+            UPLOAD_ERR_FORM_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป',
+            UPLOAD_ERR_PARTIAL => 'อัปโหลดไฟล์ได้เพียงบางส่วน',
+            UPLOAD_ERR_NO_FILE => 'ไม่ได้เลือกไฟล์',
+            UPLOAD_ERR_NO_TMP_DIR => 'ไม่มีโฟลเดอร์ชั่วคราว',
+            UPLOAD_ERR_CANT_WRITE => 'ไม่สามารถเขียนไฟล์ลงดิสก์ได้',
+            UPLOAD_ERR_EXTENSION => 'ส่วนขยาย PHP หยุดการอัปโหลด'
+        ];
+        $error_msg = $error_messages[$file['error']] ?? 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+        return ['success' => false, 'message' => $error_msg];
+    }
+    
+    // ตรวจสอบขนาดไฟล์ (5MB)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        return ['success' => false, 'message' => 'ไฟล์ต้องมีขนาดไม่เกิน 5 MB'];
+    }
+    
+    // ตรวจสอบประเภทไฟล์
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mime_type, $allowed_types)) {
+        return ['success' => false, 'message' => 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, GIF, WEBP เท่านั้น'];
+    }
+    
+    // ตรวจสอบนามสกุลไฟล์
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $allowed_ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!in_array($extension, $allowed_ext)) {
+        return ['success' => false, 'message' => 'นามสกุลไฟล์ไม่ถูกต้อง'];
+    }
+    
+    // สร้างชื่อไฟล์ตาม ID สินค้า
+    $timestamp = time();
+    $filename = $product_id . '_' . $timestamp . '.' . $extension;
+    $target_path = $upload_dir . $filename;
+    
+    // ย้ายไฟล์
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
+        chmod($target_path, 0644);
+        
+        // หา sort_order ล่าสุด
+        $max_sort = fetchOne("SELECT MAX(sort_order) as max FROM product_images WHERE product_id = ?", [$product_id]);
+        $sort_order = ($max_sort['max'] ?? 0) + 1;
+        
+        // บันทึกลง database
+        $sql = "INSERT INTO product_images (product_id, image_path, is_primary, sort_order, created_at) 
+                VALUES (?, ?, ?, ?, NOW())";
+        $stmt = $pdo->prepare($sql);
+        $result = $stmt->execute([$product_id, $filename, $is_primary ? 1 : 0, $sort_order]);
+        
+        if (!$result) {
+            // ถ้าบันทึก database ไม่สำเร็จ ให้ลบไฟล์ทิ้ง
+            unlink($target_path);
+            return ['success' => false, 'message' => 'ไม่สามารถบันทึกข้อมูลรูปภาพลงฐานข้อมูลได้'];
+        }
+        
+        $image_id = $pdo->lastInsertId();
+        
+        return [
+            'success' => true,
+            'message' => 'อัปโหลดรูปภาพสำเร็จ',
+            'image_id' => $image_id,
+            'filename' => $filename,
+            'path' => $target_path
+        ];
+    } else {
+        $error = error_get_last();
+        return [
+            'success' => false,
+            'message' => 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้: ' . ($error['message'] ?? 'ไม่ทราบสาเหตุ')
+        ];
+    }
+}
+
+/**
+ * ดึงรูปภาพหลักของสินค้า
+ */
+function getProductImage($product_id) {
+    $image = fetchOne("SELECT * FROM product_images WHERE product_id = ? AND is_primary = 1", [$product_id]);
+    if ($image) {
+        return $image;
+    }
+    
+    // ถ้าไม่มีรูปหลัก ให้ดึงรูปแรก
+    $image = fetchOne("SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order LIMIT 1", [$product_id]);
+    return $image;
+}
+
+/**
+ * ดึงรูปภาพทั้งหมดของสินค้า
+ */
+function getProductImages($product_id) {
+    return fetchAll("SELECT * FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, sort_order", [$product_id]);
+}
+
+/**
+ * สร้าง slug
+ */
+function createSlug($text) {
+    $thai_to_eng = [
+        'ก' => 'k', 'ข' => 'kh', 'ค' => 'kh', 'ง' => 'ng', 'จ' => 'ch',
+        'ช' => 'ch', 'ซ' => 's', 'ญ' => 'y', 'ด' => 'd', 'ต' => 't',
+        'ท' => 'th', 'น' => 'n', 'บ' => 'b', 'ป' => 'p', 'พ' => 'ph',
+        'ฟ' => 'f', 'ม' => 'm', 'ย' => 'y', 'ร' => 'r', 'ล' => 'l',
+        'ว' => 'w', 'ส' => 's', 'ห' => 'h', 'อ' => 'a', 'ฮ' => 'h'
+    ];
+    
+    $text = strtr($text, $thai_to_eng);
+    $text = preg_replace('/[^a-z0-9-]/', '-', strtolower(trim($text)));
+    $text = preg_replace('/-+/', '-', $text);
+    return trim($text, '-') ?: 'product-' . time();
+}
+
+// ============================================
 // จัดการการลบรูปภาพ
 // ============================================
 if(isset($_GET['delete_image'])) {
@@ -109,149 +260,6 @@ if(isset($_GET['delete'])) {
     
     header('Location: admin_products.php');
     exit();
-}
-
-// ============================================
-// ฟังก์ชันอัปโหลดรูปภาพ
-// ============================================
-function uploadProductImage($file, $product_id, $is_primary = false) {
-    // ตรวจสอบว่ามีไฟล์หรือไม่
-    if (!isset($file) || $file['error'] != UPLOAD_ERR_OK) {
-        return ['success' => false, 'message' => 'ไม่มีไฟล์ที่อัปโหลด'];
-    }
-    
-    $upload_dir = "uploads/products/";
-    
-    // สร้างโฟลเดอร์ถ้ายังไม่มี
-    if (!file_exists($upload_dir)) {
-        if (!mkdir($upload_dir, 0777, true)) {
-            return ['success' => false, 'message' => 'ไม่สามารถสร้างโฟลเดอร์ uploads/products/ ได้'];
-        }
-    }
-    
-    // ตรวจสอบสิทธิ์การเขียน
-    if (!is_writable($upload_dir)) {
-        chmod($upload_dir, 0777);
-        if (!is_writable($upload_dir)) {
-            return ['success' => false, 'message' => 'โฟลเดอร์ uploads/products/ ไม่สามารถเขียนได้'];
-        }
-    }
-    
-    // ตรวจสอบข้อผิดพลาด
-    if ($file['error'] != UPLOAD_ERR_OK) {
-        $error_messages = [
-            UPLOAD_ERR_INI_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป (จำกัด ' . ini_get('upload_max_filesize') . ')',
-            UPLOAD_ERR_FORM_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป',
-            UPLOAD_ERR_PARTIAL => 'อัปโหลดไฟล์ได้เพียงบางส่วน',
-            UPLOAD_ERR_NO_FILE => 'ไม่ได้เลือกไฟล์',
-            UPLOAD_ERR_NO_TMP_DIR => 'ไม่มีโฟลเดอร์ชั่วคราว',
-            UPLOAD_ERR_CANT_WRITE => 'ไม่สามารถเขียนไฟล์ลงดิสก์ได้',
-            UPLOAD_ERR_EXTENSION => 'ส่วนขยาย PHP หยุดการอัปโหลด'
-        ];
-        $error_msg = $error_messages[$file['error']] ?? 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ';
-        return ['success' => false, 'message' => $error_msg];
-    }
-    
-    // ตรวจสอบขนาดไฟล์ (5MB)
-    if ($file['size'] > 5 * 1024 * 1024) {
-        return ['success' => false, 'message' => 'ไฟล์ต้องมีขนาดไม่เกิน 5 MB'];
-    }
-    
-    // ตรวจสอบประเภทไฟล์
-    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mime_type = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
-    
-    if (!in_array($mime_type, $allowed_types)) {
-        return ['success' => false, 'message' => 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, GIF, WEBP เท่านั้น'];
-    }
-    
-    // ตรวจสอบนามสกุลไฟล์
-    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowed_ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-    if (!in_array($extension, $allowed_ext)) {
-        return ['success' => false, 'message' => 'นามสกุลไฟล์ไม่ถูกต้อง'];
-    }
-    
-    // สร้างชื่อไฟล์ตาม ID สินค้า
-    $timestamp = time();
-    $filename = $product_id . '_' . $timestamp . '.' . $extension;
-    $target_path = $upload_dir . $filename;
-    
-    // ย้ายไฟล์
-    if (move_uploaded_file($file['tmp_name'], $target_path)) {
-        chmod($target_path, 0644);
-        
-        // หา sort_order ล่าสุด
-        global $pdo;
-        $max_sort = fetchOne("SELECT MAX(sort_order) as max FROM product_images WHERE product_id = ?", [$product_id]);
-        $sort_order = ($max_sort['max'] ?? 0) + 1;
-        
-        // บันทึกลง database
-        $sql = "INSERT INTO product_images (product_id, image_path, is_primary, sort_order, created_at) 
-                VALUES (?, ?, ?, ?, NOW())";
-        $stmt = $pdo->prepare($sql);
-        $result = $stmt->execute([$product_id, $filename, $is_primary ? 1 : 0, $sort_order]);
-        
-        if (!$result) {
-            // ถ้าบันทึก database ไม่สำเร็จ ให้ลบไฟล์ทิ้ง
-            unlink($target_path);
-            return ['success' => false, 'message' => 'ไม่สามารถบันทึกข้อมูลรูปภาพลงฐานข้อมูลได้'];
-        }
-        
-        $image_id = $pdo->lastInsertId();
-        
-        return [
-            'success' => true,
-            'message' => 'อัปโหลดรูปภาพสำเร็จ',
-            'image_id' => $image_id,
-            'filename' => $filename,
-            'path' => $target_path
-        ];
-    } else {
-        $error = error_get_last();
-        return [
-            'success' => false,
-            'message' => 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้: ' . ($error['message'] ?? 'ไม่ทราบสาเหตุ')
-        ];
-    }
-}
-
-// ============================================
-// ฟังก์ชันดึงรูปภาพ
-// ============================================
-function getProductImage($product_id) {
-    $image = fetchOne("SELECT * FROM product_images WHERE product_id = ? AND is_primary = 1", [$product_id]);
-    if ($image) {
-        return $image;
-    }
-    
-    // ถ้าไม่มีรูปหลัก ให้ดึงรูปแรก
-    $image = fetchOne("SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order LIMIT 1", [$product_id]);
-    return $image;
-}
-
-function getProductImages($product_id) {
-    return fetchAll("SELECT * FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, sort_order", [$product_id]);
-}
-
-// ============================================
-// ฟังก์ชันสร้าง slug
-// ============================================
-function createSlug($text) {
-    $thai_to_eng = [
-        'ก' => 'k', 'ข' => 'kh', 'ค' => 'kh', 'ง' => 'ng', 'จ' => 'ch',
-        'ช' => 'ch', 'ซ' => 's', 'ญ' => 'y', 'ด' => 'd', 'ต' => 't',
-        'ท' => 'th', 'น' => 'n', 'บ' => 'b', 'ป' => 'p', 'พ' => 'ph',
-        'ฟ' => 'f', 'ม' => 'm', 'ย' => 'y', 'ร' => 'r', 'ล' => 'l',
-        'ว' => 'w', 'ส' => 's', 'ห' => 'h', 'อ' => 'a', 'ฮ' => 'h'
-    ];
-    
-    $text = strtr($text, $thai_to_eng);
-    $text = preg_replace('/[^a-z0-9-]/', '-', strtolower(trim($text)));
-    $text = preg_replace('/-+/', '-', $text);
-    return trim($text, '-') ?: 'product-' . time();
 }
 
 // ============================================
