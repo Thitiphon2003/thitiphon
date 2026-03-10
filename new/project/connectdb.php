@@ -54,13 +54,4 @@ function getDatabaseInfo($conn) {
     
     return $info;
 }
-
-// Optional: Display database info
-$db_info = getDatabaseInfo($conn);
-echo "<div style='background: #e2f3ff; color: #004085; padding: 1rem; margin: 1rem; border-radius: 5px; border-left: 4px solid #17a2b8;'>
-        <strong>📊 ข้อมูลฐานข้อมูล</strong><br>
-        MySQL Version: " . $db_info['version'] . "<br>
-        ขนาดฐานข้อมูล: " . $db_info['size_mb'] . " MB<br>
-        จำนวนตาราง: " . $db_info['table_count'] . " ตาราง
-      </div>";
 ?>
