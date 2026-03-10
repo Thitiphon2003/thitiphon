@@ -1,9 +1,24 @@
 <?php
-require_once 'connectdb.php';
-require_once 'includes/config.php';
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-if (!isAdmin()) {
-    redirect('../login.php');
+require_once __DIR__ . '/../includes/config.php';
+
+if (!isset($conn) || $conn->connect_error) {
+    die("Connection failed");
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../login.php");
+    exit();
+}
+
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    die("Access denied");
 }
 
 // Handle store actions

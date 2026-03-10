@@ -214,8 +214,6 @@ include 'includes/new-header.php';
                     <div style="display: flex; justify-content: center; gap: 1rem; font-size: 2rem; color: var(--medium-gray);">
                         <i class="fab fa-cc-visa" title="Visa"></i>
                         <i class="fab fa-cc-mastercard" title="Mastercard"></i>
-                        <i class="fab fa-cc-paypal" title="PayPal"></i>
-                        <i class="fas fa-money-bill-wave" title="เก็บเงินปลายทาง"></i>
                     </div>
                 </div>
             </div>
