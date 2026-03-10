@@ -29,9 +29,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         $query = "INSERT INTO categories (category_name, category_description) 
                   VALUES ('$name', '$description')";
-        $conn->query($query);
         
-    } elseif (isset($_POST['edit_category'])) {
+        if ($conn->query($query)) {
+            $_SESSION['success'] = "เพิ่มหมวดหมู่สำเร็จ";
+        } else {
+            $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
+        }
+        header("Location: categories.php");
+        exit();
+    }
+    
+    if (isset($_POST['edit_category'])) {
         $id = (int)$_POST['category_id'];
         $name = sanitize($_POST['category_name']);
         $description = sanitize($_POST['category_description']);
@@ -40,9 +48,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   category_name = '$name',
                   category_description = '$description'
                   WHERE id = $id";
-        $conn->query($query);
         
-    } elseif (isset($_POST['delete_category'])) {
+        if ($conn->query($query)) {
+            $_SESSION['success'] = "แก้ไขหมวดหมู่สำเร็จ";
+        } else {
+            $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
+        }
+        header("Location: categories.php");
+        exit();
+    }
+    
+    if (isset($_POST['delete_category'])) {
         $id = (int)$_POST['category_id'];
         
         // Check if category has products
@@ -50,12 +66,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $result = $check->fetch_assoc();
         
         if ($result['count'] == 0) {
-            $query = "DELETE FROM categories WHERE id = $id";
-            $conn->query($query);
-            $success = "ลบหมวดหมู่สำเร็จ";
+            if ($conn->query("DELETE FROM categories WHERE id = $id")) {
+                $_SESSION['success'] = "ลบหมวดหมู่สำเร็จ";
+            } else {
+                $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
+            }
         } else {
-            $error = "ไม่สามารถลบหมวดหมู่ที่มีสินค้าอยู่ได้";
+            $_SESSION['error'] = "ไม่สามารถลบหมวดหมู่ที่มีสินค้าอยู่ได้";
         }
+        header("Location: categories.php");
+        exit();
     }
 }
 
@@ -65,6 +85,9 @@ $categories = $conn->query("SELECT c.*, COUNT(p.id) as product_count
                            LEFT JOIN products p ON c.id = p.category_id 
                            GROUP BY c.id 
                            ORDER BY c.created_at DESC");
+
+// Get admin info
+$admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->fetch_assoc();
 ?>
 
 <!DOCTYPE html>
@@ -72,58 +95,199 @@ $categories = $conn->query("SELECT c.*, COUNT(p.id) as product_count
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จัดการหมวดหมู่ - Admin</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <title>จัดการหมวดหมู่ - Admin Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/admin-style.css">
     <style>
-        .message {
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 5px;
+        .category-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
         }
-        .success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        .product-count {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: var(--light);
+            border-radius: 999px;
+            font-size: 0.875rem;
+            color: var(--secondary);
         }
     </style>
 </head>
 <body>
-    <div class="admin-container">
+    <div class="admin-wrapper">
+        <!-- Sidebar -->
         <div class="admin-sidebar">
-            <h2 style="padding: 0 1.5rem; margin-bottom: 2rem;">Admin Panel</h2>
-            <a href="index.php">แดชบอร์ด</a>
-            <a href="users.php">จัดการผู้ใช้</a>
-            <a href="products.php">จัดการสินค้า</a>
-            <a href="orders.php">จัดการออเดอร์</a>
-            <a href="categories.php" style="background: var(--primary-blue);">จัดการหมวดหมู่</a>
-            <a href="stores.php">จัดการร้านค้า</a>
-            <a href="../logout.php">ออกจากระบบ</a>
+            <div class="sidebar-header">
+                <h2>ShopHub</h2>
+                <p>Admin Panel</p>
+            </div>
+            
+            <div class="sidebar-menu">
+                <div class="menu-section">
+                    <div class="menu-title">เมนูหลัก</div>
+                    <a href="index.php" class="menu-item">
+                        <i class="fas fa-home"></i>
+                        <span>แดชบอร์ด</span>
+                    </a>
+                    <a href="users.php" class="menu-item">
+                        <i class="fas fa-users"></i>
+                        <span>จัดการผู้ใช้</span>
+                    </a>
+                    <a href="products.php" class="menu-item">
+                        <i class="fas fa-box"></i>
+                        <span>จัดการสินค้า</span>
+                    </a>
+                    <a href="orders.php" class="menu-item">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span>จัดการออเดอร์</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <div class="menu-title">จัดการระบบ</div>
+                    <a href="categories.php" class="menu-item active">
+                        <i class="fas fa-tags"></i>
+                        <span>จัดการหมวดหมู่</span>
+                    </a>
+                    <a href="stores.php" class="menu-item">
+                        <i class="fas fa-store"></i>
+                        <span>จัดการร้านค้า</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <div class="menu-title">ระบบ</div>
+                    <a href="../index.php" class="menu-item">
+                        <i class="fas fa-globe"></i>
+                        <span>กลับสู่หน้าร้าน</span>
+                    </a>
+                    <a href="../logout.php" class="menu-item">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>ออกจากระบบ</span>
+                    </a>
+                </div>
+            </div>
         </div>
         
-        <div class="admin-content">
-            <h1>จัดการหมวดหมู่</h1>
+        <!-- Main Content -->
+        <div class="admin-main">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <h1 class="page-title">จัดการหมวดหมู่</h1>
+                <div class="user-info">
+                    <span>สวัสดี, <?php echo htmlspecialchars($admin['fullname'] ?: $admin['username']); ?></span>
+                    <div class="user-avatar">
+                        <?php echo strtoupper(substr($admin['username'], 0, 1)); ?>
+                    </div>
+                </div>
+            </div>
             
-            <?php if (isset($success)): ?>
-                <div class="message success"><?php echo $success; ?></div>
+            <!-- Alert Messages -->
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                </div>
             <?php endif; ?>
             
-            <?php if (isset($error)): ?>
-                <div class="message error"><?php echo $error; ?></div>
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                </div>
             <?php endif; ?>
             
-            <button onclick="showAddForm()" class="btn" style="margin-bottom: 1rem;">+ เพิ่มหมวดหมู่ใหม่</button>
+            <!-- Action Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div class="search-box" style="flex: 1; margin-right: 1rem;">
+                    <input type="text" id="searchInput" placeholder="ค้นหาหมวดหมู่...">
+                    <button onclick="searchCategories()"><i class="fas fa-search"></i> ค้นหา</button>
+                </div>
+                <button class="btn btn-success" onclick="showAddModal()">
+                    <i class="fas fa-plus"></i> เพิ่มหมวดหมู่ใหม่
+                </button>
+            </div>
             
-            <!-- Add Category Form -->
-            <div id="addForm" style="display: none; background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem;">
+            <!-- Categories Grid/Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>รายการหมวดหมู่ทั้งหมด</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="categoriesTable">
+                            <thead>
+                                <tr>
+                                    <th>ไอคอน</th>
+                                    <th>ชื่อหมวดหมู่</th>
+                                    <th>รายละเอียด</th>
+                                    <th>จำนวนสินค้า</th>
+                                    <th>วันที่สร้าง</th>
+                                    <th>จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while ($category = $categories->fetch_assoc()): ?>
+                                    <tr>
+                                        <td>
+                                            <div class="category-icon">
+                                                <i class="fas fa-tag"></i>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($category['category_name']); ?></strong>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($category['category_description'] ?: '-'); ?></td>
+                                        <td>
+                                            <span class="product-count">
+                                                <?php echo $category['product_count']; ?> รายการ
+                                            </span>
+                                        </td>
+                                        <td><?php echo date('d/m/Y', strtotime($category['created_at'])); ?></td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-primary btn-sm" onclick="editCategory(<?php echo htmlspecialchars(json_encode($category)); ?>)">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <?php if ($category['product_count'] == 0): ?>
+                                                    <button class="btn btn-danger btn-sm" onclick="deleteCategory(<?php echo $category['id']; ?>)">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                <?php else: ?>
+                                                    <button class="btn btn-danger btn-sm" disabled title="ไม่สามารถลบได้ เนื่องจากมีสินค้าอยู่">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Category Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
                 <h3>เพิ่มหมวดหมู่ใหม่</h3>
-                <form method="POST">
+                <button class="modal-close" onclick="closeModal('addModal')">&times;</button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
                     <div class="form-group">
-                        <label>ชื่อหมวดหมู่</label>
+                        <label>ชื่อหมวดหมู่ *</label>
                         <input type="text" name="category_name" class="form-control" required>
                     </div>
                     
@@ -131,89 +295,99 @@ $categories = $conn->query("SELECT c.*, COUNT(p.id) as product_count
                         <label>รายละเอียด</label>
                         <textarea name="category_description" class="form-control" rows="3"></textarea>
                     </div>
-                    
-                    <button type="submit" name="add_category" class="btn">บันทึก</button>
-                    <button type="button" onclick="hideAddForm()" class="btn btn-red">ยกเลิก</button>
-                </form>
-            </div>
-            
-            <!-- Categories Table -->
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>ชื่อหมวดหมู่</th>
-                        <th>รายละเอียด</th>
-                        <th>จำนวนสินค้า</th>
-                        <th>วันที่สร้าง</th>
-                        <th>จัดการ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while ($category = $categories->fetch_assoc()): ?>
-                        <tr>
-                            <td><?php echo $category['id']; ?></td>
-                            <td><?php echo $category['category_name']; ?></td>
-                            <td><?php echo $category['category_description']; ?></td>
-                            <td><?php echo $category['product_count']; ?></td>
-                            <td><?php echo date('d/m/Y', strtotime($category['created_at'])); ?></td>
-                            <td>
-                                <button onclick="editCategory(<?php echo htmlspecialchars(json_encode($category)); ?>)" 
-                                        class="btn">แก้ไข</button>
-                                <form method="POST" style="display: inline;" 
-                                      onsubmit="return confirm('ลบหมวดหมู่นี้?')">
-                                    <input type="hidden" name="category_id" value="<?php echo $category['id']; ?>">
-                                    <button type="submit" name="delete_category" class="btn btn-red">ลบ</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" name="add_category" class="btn btn-success">บันทึก</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">ยกเลิก</button>
+                </div>
+            </form>
         </div>
     </div>
     
     <!-- Edit Category Modal -->
-    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-        <div style="background: white; width: 90%; max-width: 500px; margin: 50px auto; padding: 2rem; border-radius: 10px;">
-            <h3>แก้ไขหมวดหมู่</h3>
-            <form method="POST" id="editForm">
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>แก้ไขหมวดหมู่</h3>
+                <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+            </div>
+            <form method="POST">
                 <input type="hidden" name="category_id" id="edit_id">
                 
-                <div class="form-group">
-                    <label>ชื่อหมวดหมู่</label>
-                    <input type="text" name="category_name" id="edit_name" class="form-control" required>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>ชื่อหมวดหมู่ *</label>
+                        <input type="text" name="category_name" id="edit_name" class="form-control" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>รายละเอียด</label>
+                        <textarea name="category_description" id="edit_description" class="form-control" rows="3"></textarea>
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <label>รายละเอียด</label>
-                    <textarea name="category_description" id="edit_description" class="form-control" rows="3"></textarea>
+                <div class="modal-footer">
+                    <button type="submit" name="edit_category" class="btn btn-success">บันทึก</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">ยกเลิก</button>
                 </div>
-                
-                <button type="submit" name="edit_category" class="btn">บันทึก</button>
-                <button type="button" onclick="closeEditModal()" class="btn btn-red">ปิด</button>
             </form>
         </div>
     </div>
     
     <script>
-    function showAddForm() {
-        document.getElementById('addForm').style.display = 'block';
+    function showModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
     }
     
-    function hideAddForm() {
-        document.getElementById('addForm').style.display = 'none';
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+    }
+    
+    function showAddModal() {
+        showModal('addModal');
     }
     
     function editCategory(category) {
         document.getElementById('edit_id').value = category.id;
         document.getElementById('edit_name').value = category.category_name;
         document.getElementById('edit_description').value = category.category_description;
-        document.getElementById('editModal').style.display = 'block';
+        showModal('editModal');
     }
     
-    function closeEditModal() {
-        document.getElementById('editModal').style.display = 'none';
+    function deleteCategory(id) {
+        if (confirm('ต้องการลบหมวดหมู่นี้? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `<input type="hidden" name="category_id" value="${id}"><input type="hidden" name="delete_category" value="1">`;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+    
+    function searchCategories() {
+        const searchText = document.getElementById('searchInput').value.toLowerCase();
+        const table = document.getElementById('categoriesTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        
+        for (let row of rows) {
+            const cells = row.getElementsByTagName('td');
+            let found = false;
+            
+            for (let cell of cells) {
+                if (cell.textContent.toLowerCase().includes(searchText)) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            row.style.display = found ? '' : 'none';
+        }
+    }
+    
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.classList.remove('active');
+        }
     }
     </script>
 </body>

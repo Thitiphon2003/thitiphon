@@ -26,25 +26,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
     $order_id = (int)$_POST['order_id'];
     $status = sanitize($_POST['order_status']);
     
-    $query = "UPDATE orders SET order_status = '$status' WHERE id = $order_id";
-    $conn->query($query);
-    
-    // Create notification for user
-    $order = $conn->query("SELECT user_id FROM orders WHERE id = $order_id")->fetch_assoc();
-    $status_text = [
-        'pending' => 'รอดำเนินการ',
-        'processing' => 'กำลังดำเนินการ',
-        'shipped' => 'จัดส่งแล้ว',
-        'delivered' => 'ได้รับสินค้าแล้ว',
-        'cancelled' => 'ยกเลิก'
-    ];
-    
-    $notify = "INSERT INTO notifications (user_id, title, message, type) 
-               VALUES ({$order['user_id']}, 'อัปเดตสถานะออเดอร์', 
-               'ออเดอร์ #$order_id เปลี่ยนสถานะเป็น {$status_text[$status]}', 'order')";
-    $conn->query($notify);
-    
-    $success = "อัปเดตสถานะออเดอร์สำเร็จ";
+    if ($conn->query("UPDATE orders SET order_status = '$status' WHERE id = $order_id")) {
+        $_SESSION['success'] = "อัปเดตสถานะออเดอร์สำเร็จ";
+        
+        // Create notification for user
+        $order = $conn->query("SELECT user_id FROM orders WHERE id = $order_id")->fetch_assoc();
+        $status_text = [
+            'pending' => 'รอดำเนินการ',
+            'processing' => 'กำลังดำเนินการ',
+            'shipped' => 'จัดส่งแล้ว',
+            'delivered' => 'ได้รับสินค้าแล้ว',
+            'cancelled' => 'ยกเลิก'
+        ];
+        
+        $notify = "INSERT INTO notifications (user_id, title, message, type) 
+                   VALUES ({$order['user_id']}, 'อัปเดตสถานะออเดอร์', 
+                   'ออเดอร์ #$order_id เปลี่ยนสถานะเป็น {$status_text[$status]}', 'order')";
+        $conn->query($notify);
+    } else {
+        $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
+    }
+    header("Location: orders.php");
+    exit();
 }
 
 // Get filter parameters
@@ -86,6 +89,9 @@ if (isset($_GET['view'])) {
                                  JOIN products p ON oi.product_id = p.id 
                                  WHERE oi.order_id = $order_id");
 }
+
+// Get admin info
+$admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->fetch_assoc();
 ?>
 
 <!DOCTYPE html>
@@ -93,145 +99,356 @@ if (isset($_GET['view'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จัดการออเดอร์ - Admin</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <title>จัดการออเดอร์ - Admin Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/admin-style.css">
     <style>
-        .status-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 3px;
-            color: white;
-            font-size: 0.8rem;
-            display: inline-block;
+        .order-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
         }
-        .status-pending { background: #ffc107; }
-        .status-processing { background: #17a2b8; }
-        .status-shipped { background: #007bff; }
-        .status-delivered { background: #28a745; }
-        .status-cancelled { background: #dc3545; }
-        .message {
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 5px;
+        .summary-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            text-align: center;
         }
-        .success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .summary-card .label {
+            color: var(--secondary);
+            font-size: 0.875rem;
         }
         .filter-form {
             background: white;
-            padding: 1rem;
-            border-radius: 10px;
-            margin-bottom: 1rem;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             align-items: end;
         }
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--border);
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 1.5rem;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -2rem;
+            top: 0;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 2px solid white;
+        }
+        .order-product-image {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-right: 0.5rem;
+        }
     </style>
 </head>
 <body>
-    <div class="admin-container">
+    <div class="admin-wrapper">
+        <!-- Sidebar -->
         <div class="admin-sidebar">
-            <h2 style="padding: 0 1.5rem; margin-bottom: 2rem;">Admin Panel</h2>
-            <a href="index.php">แดชบอร์ด</a>
-            <a href="users.php">จัดการผู้ใช้</a>
-            <a href="products.php">จัดการสินค้า</a>
-            <a href="orders.php" style="background: var(--primary-blue);">จัดการออเดอร์</a>
-            <a href="categories.php">จัดการหมวดหมู่</a>
-            <a href="stores.php">จัดการร้านค้า</a>
-            <a href="../logout.php">ออกจากระบบ</a>
+            <div class="sidebar-header">
+                <h2>ShopHub</h2>
+                <p>Admin Panel</p>
+            </div>
+            
+            <div class="sidebar-menu">
+                <div class="menu-section">
+                    <div class="menu-title">เมนูหลัก</div>
+                    <a href="index.php" class="menu-item">
+                        <i class="fas fa-home"></i>
+                        <span>แดชบอร์ด</span>
+                    </a>
+                    <a href="users.php" class="menu-item">
+                        <i class="fas fa-users"></i>
+                        <span>จัดการผู้ใช้</span>
+                    </a>
+                    <a href="products.php" class="menu-item">
+                        <i class="fas fa-box"></i>
+                        <span>จัดการสินค้า</span>
+                    </a>
+                    <a href="orders.php" class="menu-item active">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span>จัดการออเดอร์</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <div class="menu-title">จัดการระบบ</div>
+                    <a href="categories.php" class="menu-item">
+                        <i class="fas fa-tags"></i>
+                        <span>จัดการหมวดหมู่</span>
+                    </a>
+                    <a href="stores.php" class="menu-item">
+                        <i class="fas fa-store"></i>
+                        <span>จัดการร้านค้า</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <div class="menu-title">ระบบ</div>
+                    <a href="../index.php" class="menu-item">
+                        <i class="fas fa-globe"></i>
+                        <span>กลับสู่หน้าร้าน</span>
+                    </a>
+                    <a href="../logout.php" class="menu-item">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>ออกจากระบบ</span>
+                    </a>
+                </div>
+            </div>
         </div>
         
-        <div class="admin-content">
-            <h1>จัดการออเดอร์</h1>
+        <!-- Main Content -->
+        <div class="admin-main">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <h1 class="page-title">จัดการออเดอร์</h1>
+                <div class="user-info">
+                    <span>สวัสดี, <?php echo htmlspecialchars($admin['fullname'] ?: $admin['username']); ?></span>
+                    <div class="user-avatar">
+                        <?php echo strtoupper(substr($admin['username'], 0, 1)); ?>
+                    </div>
+                </div>
+            </div>
             
-            <?php if (isset($success)): ?>
-                <div class="message success"><?php echo $success; ?></div>
+            <!-- Alert Messages -->
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                </div>
             <?php endif; ?>
             
             <?php if ($order_details): ?>
                 <!-- Order Details View -->
-                <a href="orders.php" class="btn" style="margin-bottom: 1rem;">← กลับไปรายการออเดอร์</a>
+                <a href="orders.php" class="btn btn-primary" style="margin-bottom: 1rem;">
+                    <i class="fas fa-arrow-left"></i> กลับไปรายการออเดอร์
+                </a>
                 
                 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+                    <!-- Left Column -->
                     <div>
-                        <div style="background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 1rem;">
-                            <h3>รายละเอียดออเดอร์ #<?php echo $order_details['id']; ?></h3>
-                            <p><strong>วันที่สั่งซื้อ:</strong> <?php echo date('d/m/Y H:i', strtotime($order_details['order_date'])); ?></p>
-                            <p><strong>สถานะ:</strong> 
-                                <span class="status-badge status-<?php echo $order_details['order_status']; ?>">
-                                    <?php 
-                                    switch($order_details['order_status']) {
-                                        case 'pending': echo 'รอดำเนินการ'; break;
-                                        case 'processing': echo 'กำลังดำเนินการ'; break;
-                                        case 'shipped': echo 'จัดส่งแล้ว'; break;
-                                        case 'delivered': echo 'ได้รับสินค้า'; break;
-                                        case 'cancelled': echo 'ยกเลิก'; break;
-                                    }
-                                    ?>
-                                </span>
-                            </p>
-                            <p><strong>วิธีการชำระเงิน:</strong> <?php echo $order_details['payment_method']; ?></p>
-                            <p><strong>ยอดรวม:</strong> ฿<?php echo number_format($order_details['total_amount'], 2); ?></p>
-                        </div>
-                        
-                        <div style="background: white; padding: 1.5rem; border-radius: 10px;">
-                            <h3>รายการสินค้า</h3>
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>สินค้า</th>
-                                        <th>ราคา</th>
-                                        <th>จำนวน</th>
-                                        <th>รวม</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php while ($item = $order_items->fetch_assoc()): ?>
-                                        <tr>
-                                            <td><?php echo $item['product_name']; ?></td>
-                                            <td>฿<?php echo number_format($item['price'], 2); ?></td>
-                                            <td><?php echo $item['quantity']; ?></td>
-                                            <td>฿<?php echo number_format($item['price'] * $item['quantity'], 2); ?></td>
+                        <!-- Order Info -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>รายละเอียดออเดอร์ #<?php echo $order_details['id']; ?></h3>
+                            </div>
+                            <div class="card-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div>
+                                        <p style="color: var(--secondary);">วันที่สั่งซื้อ</p>
+                                        <p><strong><?php echo date('d/m/Y H:i', strtotime($order_details['order_date'])); ?></strong></p>
+                                    </div>
+                                    <div>
+                                        <p style="color: var(--secondary);">สถานะ</p>
+                                        <?php
+                                        $status_class = '';
+                                        switch($order_details['order_status']) {
+                                            case 'pending': $status_class = 'badge-warning'; break;
+                                            case 'processing': $status_class = 'badge-info'; break;
+                                            case 'shipped': $status_class = 'badge-primary'; break;
+                                            case 'delivered': $status_class = 'badge-success'; break;
+                                            case 'cancelled': $status_class = 'badge-danger'; break;
+                                        }
+                                        ?>
+                                        <span class="badge <?php echo $status_class; ?>">
+                                            <?php 
+                                            switch($order_details['order_status']) {
+                                                case 'pending': echo 'รอดำเนินการ'; break;
+                                                case 'processing': echo 'กำลังดำเนินการ'; break;
+                                                case 'shipped': echo 'จัดส่งแล้ว'; break;
+                                                case 'delivered': echo 'ได้รับสินค้า'; break;
+                                                case 'cancelled': echo 'ยกเลิก'; break;
+                                            }
+                                            ?>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <p style="color: var(--secondary);">วิธีการชำระเงิน</p>
+                                        <p><strong><?php echo $order_details['payment_method']; ?></strong></p>
+                                    </div>
+                                    <div>
+                                        <p style="color: var(--secondary);">ยอดรวม</p>
+                                        <p><strong style="color: var(--primary); font-size: 1.25rem;">฿<?php echo number_format($order_details['total_amount'], 2); ?></strong></p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Order Items -->
+                                <h4 style="margin-bottom: 1rem;">รายการสินค้า</h4>
+                                <table style="width: 100%;">
+                                    <thead>
+                                        <tr style="background: var(--light);">
+                                            <th style="padding: 0.75rem;">สินค้า</th>
+                                            <th style="padding: 0.75rem;">ราคา</th>
+                                            <th style="padding: 0.75rem;">จำนวน</th>
+                                            <th style="padding: 0.75rem;">รวม</th>
                                         </tr>
-                                    <?php endwhile; ?>
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        <?php while ($item = $order_items->fetch_assoc()): ?>
+                                            <tr>
+                                                <td style="padding: 0.75rem;">
+                                                    <div style="display: flex; align-items: center;">
+                                                        <?php if ($item['image'] && file_exists("../assets/images/" . $item['image'])): ?>
+                                                            <img src="../assets/images/<?php echo $item['image']; ?>" 
+                                                                 alt="<?php echo $item['product_name']; ?>" 
+                                                                 class="order-product-image">
+                                                        <?php endif; ?>
+                                                        <?php echo $item['product_name']; ?>
+                                                    </div>
+                                                </td>
+                                                <td style="padding: 0.75rem;">฿<?php echo number_format($item['price'], 2); ?></td>
+                                                <td style="padding: 0.75rem;"><?php echo $item['quantity']; ?></td>
+                                                <td style="padding: 0.75rem;"><strong>฿<?php echo number_format($item['price'] * $item['quantity'], 2); ?></strong></td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Right Column -->
                     <div>
-                        <div style="background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 1rem;">
-                            <h3>ข้อมูลลูกค้า</h3>
-                            <p><strong>ชื่อผู้ใช้:</strong> <?php echo $order_details['username']; ?></p>
-                            <p><strong>ชื่อ-นามสกุล:</strong> <?php echo $order_details['fullname']; ?></p>
-                            <p><strong>อีเมล:</strong> <?php echo $order_details['email']; ?></p>
-                            <p><strong>เบอร์โทร:</strong> <?php echo $order_details['phone']; ?></p>
-                            <p><strong>ที่อยู่จัดส่ง:</strong> <?php echo $order_details['shipping_address']; ?></p>
+                        <!-- Customer Info -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>ข้อมูลลูกค้า</h3>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>ชื่อผู้ใช้:</strong> <?php echo $order_details['username']; ?></p>
+                                <p><strong>ชื่อ-นามสกุล:</strong> <?php echo $order_details['fullname']; ?></p>
+                                <p><strong>อีเมล:</strong> <?php echo $order_details['email']; ?></p>
+                                <p><strong>เบอร์โทร:</strong> <?php echo $order_details['phone']; ?></p>
+                                <p><strong>ที่อยู่จัดส่ง:</strong> <?php echo $order_details['shipping_address']; ?></p>
+                            </div>
                         </div>
                         
-                        <div style="background: white; padding: 1.5rem; border-radius: 10px;">
-                            <h3>อัปเดตสถานะ</h3>
-                            <form method="POST">
-                                <input type="hidden" name="order_id" value="<?php echo $order_details['id']; ?>">
-                                <div class="form-group">
-                                    <select name="order_status" class="form-control">
-                                        <option value="pending" <?php echo $order_details['order_status'] == 'pending' ? 'selected' : ''; ?>>รอดำเนินการ</option>
-                                        <option value="processing" <?php echo $order_details['order_status'] == 'processing' ? 'selected' : ''; ?>>กำลังดำเนินการ</option>
-                                        <option value="shipped" <?php echo $order_details['order_status'] == 'shipped' ? 'selected' : ''; ?>>จัดส่งแล้ว</option>
-                                        <option value="delivered" <?php echo $order_details['order_status'] == 'delivered' ? 'selected' : ''; ?>>ได้รับสินค้า</option>
-                                        <option value="cancelled" <?php echo $order_details['order_status'] == 'cancelled' ? 'selected' : ''; ?>>ยกเลิก</option>
-                                    </select>
+                        <!-- Update Status -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>อัปเดตสถานะ</h3>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST">
+                                    <input type="hidden" name="order_id" value="<?php echo $order_details['id']; ?>">
+                                    <div class="form-group">
+                                        <select name="order_status" class="form-control">
+                                            <option value="pending" <?php echo $order_details['order_status'] == 'pending' ? 'selected' : ''; ?>>รอดำเนินการ</option>
+                                            <option value="processing" <?php echo $order_details['order_status'] == 'processing' ? 'selected' : ''; ?>>กำลังดำเนินการ</option>
+                                            <option value="shipped" <?php echo $order_details['order_status'] == 'shipped' ? 'selected' : ''; ?>>จัดส่งแล้ว</option>
+                                            <option value="delivered" <?php echo $order_details['order_status'] == 'delivered' ? 'selected' : ''; ?>>ได้รับสินค้า</option>
+                                            <option value="cancelled" <?php echo $order_details['order_status'] == 'cancelled' ? 'selected' : ''; ?>>ยกเลิก</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" name="update_status" class="btn btn-primary" style="width: 100%;">
+                                        <i class="fas fa-save"></i> อัปเดตสถานะ
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <!-- Timeline -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>ไทม์ไลน์</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="timeline">
+                                    <div class="timeline-item">
+                                        <div class="time"><?php echo date('d/m/Y H:i', strtotime($order_details['order_date'])); ?></div>
+                                        <div class="title">สั่งซื้อสินค้า</div>
+                                    </div>
+                                    <?php if ($order_details['order_status'] != 'pending'): ?>
+                                        <div class="timeline-item">
+                                            <div class="time">-</div>
+                                            <div class="title">กำลังดำเนินการ</div>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($order_details['order_status'] == 'shipped' || $order_details['order_status'] == 'delivered'): ?>
+                                        <div class="timeline-item">
+                                            <div class="time">-</div>
+                                            <div class="title">จัดส่งแล้ว</div>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($order_details['order_status'] == 'delivered'): ?>
+                                        <div class="timeline-item">
+                                            <div class="time">-</div>
+                                            <div class="title">ได้รับสินค้า</div>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
-                                <button type="submit" name="update_status" class="btn">อัปเดตสถานะ</button>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
             <?php else: ?>
                 <!-- Orders List View -->
+                
+                <!-- Summary Cards -->
+                <?php
+                $total_orders = $conn->query("SELECT COUNT(*) as count FROM orders")->fetch_assoc()['count'];
+                $pending_orders = $conn->query("SELECT COUNT(*) as count FROM orders WHERE order_status = 'pending'")->fetch_assoc()['count'];
+                $processing_orders = $conn->query("SELECT COUNT(*) as count FROM orders WHERE order_status = 'processing'")->fetch_assoc()['count'];
+                $total_revenue = $conn->query("SELECT SUM(total_amount) as total FROM orders WHERE order_status != 'cancelled'")->fetch_assoc()['total'] ?? 0;
+                ?>
+                
+                <div class="order-summary">
+                    <div class="summary-card">
+                        <div class="number"><?php echo $total_orders; ?></div>
+                        <div class="label">ออเดอร์ทั้งหมด</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number"><?php echo $pending_orders; ?></div>
+                        <div class="label">รอดำเนินการ</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number"><?php echo $processing_orders; ?></div>
+                        <div class="label">กำลังดำเนินการ</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number">฿<?php echo number_format($total_revenue, 0); ?></div>
+                        <div class="label">ยอดขายรวม</div>
+                    </div>
+                </div>
                 
                 <!-- Filter Form -->
                 <div class="filter-form">
@@ -259,59 +476,128 @@ if (isset($_GET['view'])) {
                         </div>
                         
                         <div class="form-group">
-                            <button type="submit" class="btn">กรอง</button>
-                            <a href="orders.php" class="btn btn-red">ล้าง</a>
+                            <button type="submit" class="btn btn-primary">กรอง</button>
+                            <a href="orders.php" class="btn btn-secondary">ล้าง</a>
                         </div>
                     </form>
                 </div>
                 
+                <!-- Search Box -->
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="ค้นหาออเดอร์...">
+                    <button onclick="searchOrders()"><i class="fas fa-search"></i> ค้นหา</button>
+                </div>
+                
                 <!-- Orders Table -->
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Order ID</th>
-                            <th>ลูกค้า</th>
-                            <th>วันที่</th>
-                            <th>ยอดรวม</th>
-                            <th>สถานะ</th>
-                            <th>การชำระเงิน</th>
-                            <th>จัดการ</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while ($order = $orders->fetch_assoc()): ?>
-                            <tr>
-                                <td>#<?php echo $order['id']; ?></td>
-                                <td>
-                                    <?php echo $order['fullname'] ?: $order['username']; ?><br>
-                                    <small><?php echo $order['email']; ?></small>
-                                </td>
-                                <td><?php echo date('d/m/Y H:i', strtotime($order['order_date'])); ?></td>
-                                <td>฿<?php echo number_format($order['total_amount'], 2); ?></td>
-                                <td>
-                                    <span class="status-badge status-<?php echo $order['order_status']; ?>">
-                                        <?php 
-                                        switch($order['order_status']) {
-                                            case 'pending': echo 'รอดำเนินการ'; break;
-                                            case 'processing': echo 'กำลังดำเนินการ'; break;
-                                            case 'shipped': echo 'จัดส่งแล้ว'; break;
-                                            case 'delivered': echo 'ได้รับสินค้า'; break;
-                                            case 'cancelled': echo 'ยกเลิก'; break;
-                                        }
-                                        ?>
-                                    </span>
-                                </td>
-                                <td><?php echo $order['payment_method']; ?></td>
-                                <td>
-                                    <a href="?view=<?php echo $order['id']; ?>" class="btn">ดูรายละเอียด</a>
-                                </td>
-                            </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>รายการออเดอร์ทั้งหมด</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table id="ordersTable">
+                                <thead>
+                                    <tr>
+                                        <th>Order ID</th>
+                                        <th>ลูกค้า</th>
+                                        <th>วันที่</th>
+                                        <th>ยอดรวม</th>
+                                        <th>สถานะ</th>
+                                        <th>การชำระเงิน</th>
+                                        <th>จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($orders->num_rows > 0): ?>
+                                        <?php while ($order = $orders->fetch_assoc()): ?>
+                                            <tr>
+                                                <td><strong>#<?php echo $order['id']; ?></strong></td>
+                                                <td>
+                                                    <?php echo htmlspecialchars($order['fullname'] ?: $order['username']); ?>
+                                                    <br>
+                                                    <small style="color: var(--secondary);"><?php echo $order['email']; ?></small>
+                                                </td>
+                                                <td><?php echo date('d/m/Y H:i', strtotime($order['order_date'])); ?></td>
+                                                <td><strong style="color: var(--primary);">฿<?php echo number_format($order['total_amount'], 2); ?></strong></td>
+                                                <td>
+                                                    <?php
+                                                    $status_class = '';
+                                                    $status_text = '';
+                                                    switch($order['order_status']) {
+                                                        case 'pending':
+                                                            $status_class = 'badge-warning';
+                                                            $status_text = 'รอดำเนินการ';
+                                                            break;
+                                                        case 'processing':
+                                                            $status_class = 'badge-info';
+                                                            $status_text = 'กำลังดำเนินการ';
+                                                            break;
+                                                        case 'shipped':
+                                                            $status_class = 'badge-primary';
+                                                            $status_text = 'จัดส่งแล้ว';
+                                                            break;
+                                                        case 'delivered':
+                                                            $status_class = 'badge-success';
+                                                            $status_text = 'ได้รับสินค้า';
+                                                            break;
+                                                        case 'cancelled':
+                                                            $status_class = 'badge-danger';
+                                                            $status_text = 'ยกเลิก';
+                                                            break;
+                                                    }
+                                                    ?>
+                                                    <span class="badge <?php echo $status_class; ?>">
+                                                        <?php echo $status_text; ?>
+                                                    </span>
+                                                </td>
+                                                <td><?php echo $order['payment_method']; ?></td>
+                                                <td>
+                                                    <a href="?view=<?php echo $order['id']; ?>" class="btn btn-primary btn-sm">
+                                                        <i class="fas fa-eye"></i> ดู
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    <?php else: ?>
+                                        <tr>
+                                            <td colspan="7" style="text-align: center; padding: 2rem;">
+                                                <i class="fas fa-box-open" style="font-size: 3rem; color: #ddd; margin-bottom: 1rem;"></i>
+                                                <p>ไม่มีข้อมูลออเดอร์</p>
+                                            </td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             <?php endif; ?>
         </div>
     </div>
+    
+    <script>
+    function searchOrders() {
+        const searchText = document.getElementById('searchInput').value.toLowerCase();
+        const table = document.getElementById('ordersTable');
+        if (!table) return;
+        
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        
+        for (let row of rows) {
+            const cells = row.getElementsByTagName('td');
+            let found = false;
+            
+            for (let cell of cells) {
+                if (cell.textContent.toLowerCase().includes(searchText)) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            row.style.display = found ? '' : 'none';
+        }
+    }
+    </script>
 </body>
 </html>
 <?php $conn->close(); ?>

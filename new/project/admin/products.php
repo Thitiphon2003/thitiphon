@@ -21,7 +21,6 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     die("Access denied");
 }
 
-
 // Handle product actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_product'])) {
@@ -36,41 +35,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image = '';
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $target_dir = "../assets/images/";
-            
-            // สร้างโฟลเดอร์ถ้ายังไม่มี
             if (!file_exists($target_dir)) {
                 mkdir($target_dir, 0777, true);
             }
             
-            // สร้างชื่อไฟล์ใหม่เพื่อป้องกันชื่อซ้ำ
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
             $image = time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $image;
             
-            // ตรวจสอบว่าเป็นไฟล์รูปภาพจริง
-            $check = getimagesize($_FILES['image']['tmp_name']);
-            if ($check !== false) {
-                if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                    // อัปโหลดสำเร็จ
-                } else {
-                    $error = "ไม่สามารถอัปโหลดรูปภาพได้";
-                }
-            } else {
-                $error = "ไฟล์ที่อัปโหลดไม่ใช่รูปภาพ";
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                // Success
             }
         }
         
-        if (!isset($error)) {
-            $query = "INSERT INTO products (product_name, product_description, price, stock, image, category_id, store_id) 
-                      VALUES ('$name', '$description', $price, $stock, '$image', $category_id, $store_id)";
-            if ($conn->query($query)) {
-                $success = "เพิ่มสินค้าสำเร็จ";
-            } else {
-                $error = "เกิดข้อผิดพลาด: " . $conn->error;
-            }
-        }
+        $query = "INSERT INTO products (product_name, product_description, price, stock, image, category_id, store_id) 
+                  VALUES ('$name', '$description', $price, $stock, '$image', $category_id, $store_id)";
         
-    } elseif (isset($_POST['edit_product'])) {
+        if ($conn->query($query)) {
+            $_SESSION['success'] = "เพิ่มสินค้าสำเร็จ";
+        } else {
+            $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
+        }
+        header("Location: products.php");
+        exit();
+    }
+    
+    if (isset($_POST['edit_product'])) {
         $id = (int)$_POST['product_id'];
         $name = sanitize($_POST['product_name']);
         $description = sanitize($_POST['product_description']);
@@ -80,32 +70,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $store_id = (int)$_POST['store_id'];
         $current_image = $_POST['current_image'];
         
-        // Handle image upload
-        $image = $current_image; // ใช้รูปเดิมก่อน
-        
+        $image = $current_image;
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $target_dir = "../assets/images/";
-            
-            // สร้างโฟลเดอร์ถ้ายังไม่มี
-            if (!file_exists($target_dir)) {
-                mkdir($target_dir, 0777, true);
-            }
-            
-            // สร้างชื่อไฟล์ใหม่
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
             $new_image = time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $new_image;
             
-            // ตรวจสอบว่าเป็นไฟล์รูปภาพจริง
-            $check = getimagesize($_FILES['image']['tmp_name']);
-            if ($check !== false) {
-                if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                    // ลบรูปเก่าถ้ามี
-                    if ($current_image && file_exists($target_dir . $current_image)) {
-                        unlink($target_dir . $current_image);
-                    }
-                    $image = $new_image; // เปลี่ยนเป็นรูปใหม่
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                if ($current_image && file_exists($target_dir . $current_image)) {
+                    unlink($target_dir . $current_image);
                 }
+                $image = $new_image;
             }
         }
         
@@ -120,15 +96,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   WHERE id = $id";
         
         if ($conn->query($query)) {
-            $success = "แก้ไขสินค้าสำเร็จ";
+            $_SESSION['success'] = "แก้ไขสินค้าสำเร็จ";
         } else {
-            $error = "เกิดข้อผิดพลาด: " . $conn->error;
+            $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
         }
-        
-    } elseif (isset($_POST['delete_product'])) {
+        header("Location: products.php");
+        exit();
+    }
+    
+    if (isset($_POST['delete_product'])) {
         $id = (int)$_POST['product_id'];
         
-        // ดึงชื่อรูปเพื่อลบไฟล์
+        // Delete image file
         $img_query = $conn->query("SELECT image FROM products WHERE id = $id");
         if ($img_query && $img_query->num_rows > 0) {
             $img = $img_query->fetch_assoc();
@@ -137,16 +116,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
         
-        $query = "DELETE FROM products WHERE id = $id";
-        if ($conn->query($query)) {
-            $success = "ลบสินค้าสำเร็จ";
+        if ($conn->query("DELETE FROM products WHERE id = $id")) {
+            $_SESSION['success'] = "ลบสินค้าสำเร็จ";
         } else {
-            $error = "เกิดข้อผิดพลาด: " . $conn->error;
+            $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
         }
+        header("Location: products.php");
+        exit();
     }
 }
 
-// Get all products with joins
+// Get all products
 $products = $conn->query("SELECT p.*, c.category_name, s.store_name 
                           FROM products p 
                           LEFT JOIN categories c ON p.category_id = c.id 
@@ -158,6 +138,9 @@ $categories = $conn->query("SELECT * FROM categories ORDER BY category_name");
 
 // Get stores for dropdown
 $stores = $conn->query("SELECT * FROM stores ORDER BY store_name");
+
+// Get admin info
+$admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->fetch_assoc();
 ?>
 
 <!DOCTYPE html>
@@ -165,311 +148,435 @@ $stores = $conn->query("SELECT * FROM stores ORDER BY store_name");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จัดการสินค้า - Admin</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <title>จัดการสินค้า - Admin Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/admin-style.css">
     <style>
-        .product-thumbnail {
+        .product-image-thumb {
             width: 60px;
             height: 60px;
             object-fit: cover;
-            border-radius: 5px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
-        .no-image {
+        .no-image-thumb {
             width: 60px;
             height: 60px;
-            background: #f0f0f0;
-            border-radius: 5px;
+            background: var(--light);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8rem;
-            color: #999;
+            color: var(--secondary);
+            font-size: 1.5rem;
         }
-        .message {
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 5px;
+        .stock-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
         }
-        .success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        .stock-high {
+            background: #d1fae5;
+            color: #065f46;
         }
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        .stock-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .stock-low {
+            background: #fee2e2;
+            color: #991b1b;
         }
         .image-preview {
             max-width: 200px;
             max-height: 200px;
-            margin-top: 10px;
-            border-radius: 5px;
-            border: 1px solid #ddd;
+            margin-top: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            overflow-y: auto;
+        .filter-section {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
         }
-        .modal-content {
-            background: white;
-            width: 90%;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 2rem;
-            border-radius: 10px;
-            position: relative;
-        }
-        .close-modal {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #999;
-        }
-        .close-modal:hover {
-            color: var(--primary-red);
+        .filter-item {
+            flex: 1;
+            min-width: 150px;
         }
     </style>
 </head>
 <body>
-    <div class="admin-container">
+    <div class="admin-wrapper">
+        <!-- Sidebar -->
         <div class="admin-sidebar">
-            <h2 style="padding: 0 1.5rem; margin-bottom: 2rem;">Admin Panel</h2>
-            <a href="index.php">แดชบอร์ด</a>
-            <a href="users.php">จัดการผู้ใช้</a>
-            <a href="products.php" style="background: var(--primary-blue);">จัดการสินค้า</a>
-            <a href="orders.php">จัดการออเดอร์</a>
-            <a href="categories.php">จัดการหมวดหมู่</a>
-            <a href="stores.php">จัดการร้านค้า</a>
-            <a href="../logout.php">ออกจากระบบ</a>
+            <div class="sidebar-header">
+                <h2>ShopHub</h2>
+                <p>Admin Panel</p>
+            </div>
+            
+            <div class="sidebar-menu">
+                <div class="menu-section">
+                    <div class="menu-title">เมนูหลัก</div>
+                    <a href="index.php" class="menu-item">
+                        <i class="fas fa-home"></i>
+                        <span>แดชบอร์ด</span>
+                    </a>
+                    <a href="users.php" class="menu-item">
+                        <i class="fas fa-users"></i>
+                        <span>จัดการผู้ใช้</span>
+                    </a>
+                    <a href="products.php" class="menu-item active">
+                        <i class="fas fa-box"></i>
+                        <span>จัดการสินค้า</span>
+                        <span class="badge"><?php echo $products->num_rows; ?></span>
+                    </a>
+                    <a href="orders.php" class="menu-item">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span>จัดการออเดอร์</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <div class="menu-title">จัดการระบบ</div>
+                    <a href="categories.php" class="menu-item">
+                        <i class="fas fa-tags"></i>
+                        <span>จัดการหมวดหมู่</span>
+                    </a>
+                    <a href="stores.php" class="menu-item">
+                        <i class="fas fa-store"></i>
+                        <span>จัดการร้านค้า</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <div class="menu-title">ระบบ</div>
+                    <a href="../index.php" class="menu-item">
+                        <i class="fas fa-globe"></i>
+                        <span>กลับสู่หน้าร้าน</span>
+                    </a>
+                    <a href="../logout.php" class="menu-item">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>ออกจากระบบ</span>
+                    </a>
+                </div>
+            </div>
         </div>
         
-        <div class="admin-content">
-            <h1>จัดการสินค้า</h1>
+        <!-- Main Content -->
+        <div class="admin-main">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <h1 class="page-title">จัดการสินค้า</h1>
+                <div class="user-info">
+                    <span>สวัสดี, <?php echo htmlspecialchars($admin['fullname'] ?: $admin['username']); ?></span>
+                    <div class="user-avatar">
+                        <?php echo strtoupper(substr($admin['username'], 0, 1)); ?>
+                    </div>
+                </div>
+            </div>
             
-            <?php if (isset($success)): ?>
-                <div class="message success"><?php echo $success; ?></div>
+            <!-- Alert Messages -->
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                </div>
             <?php endif; ?>
             
-            <?php if (isset($error)): ?>
-                <div class="message error"><?php echo $error; ?></div>
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                </div>
             <?php endif; ?>
             
-            <button onclick="openAddModal()" class="btn" style="margin-bottom: 1rem;">+ เพิ่มสินค้าใหม่</button>
+            <!-- Action Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div class="filter-section">
+                    <div class="filter-item">
+                        <select class="form-control" id="categoryFilter" onchange="filterProducts()">
+                            <option value="">ทั้งหมด</option>
+                            <?php 
+                            $categories->data_seek(0);
+                            while ($cat = $categories->fetch_assoc()): 
+                            ?>
+                                <option value="<?php echo $cat['id']; ?>"><?php echo $cat['category_name']; ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <select class="form-control" id="storeFilter" onchange="filterProducts()">
+                            <option value="">ทั้งหมด</option>
+                            <?php 
+                            $stores->data_seek(0);
+                            while ($store = $stores->fetch_assoc()): 
+                            ?>
+                                <option value="<?php echo $store['id']; ?>"><?php echo $store['store_name']; ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="showAddModal()">
+                    <i class="fas fa-plus"></i> เพิ่มสินค้าใหม่
+                </button>
+            </div>
+            
+            <!-- Search Box -->
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="ค้นหาสินค้า..." onkeyup="filterProducts()">
+                <button onclick="filterProducts()"><i class="fas fa-search"></i> ค้นหา</button>
+            </div>
             
             <!-- Products Table -->
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>รูป</th>
-                        <th>ชื่อสินค้า</th>
-                        <th>ราคา</th>
-                        <th>สต็อก</th>
-                        <th>หมวดหมู่</th>
-                        <th>ร้านค้า</th>
-                        <th>จัดการ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while ($product = $products->fetch_assoc()): ?>
-                        <tr>
-                            <td>
-                                <?php if ($product['image'] && file_exists("../assets/images/" . $product['image'])): ?>
-                                    <img src="../assets/images/<?php echo $product['image']; ?>" 
-                                         alt="<?php echo $product['product_name']; ?>" 
-                                         class="product-thumbnail">
-                                <?php else: ?>
-                                    <div class="no-image">ไม่มีรูป</div>
-                                <?php endif; ?>
-                            </td>
-                            <td><?php echo $product['product_name']; ?></td>
-                            <td>฿<?php echo number_format($product['price'], 2); ?></td>
-                            <td><?php echo $product['stock']; ?></td>
-                            <td><?php echo $product['category_name']; ?></td>
-                            <td><?php echo $product['store_name']; ?></td>
-                            <td>
-                                <button onclick="openEditModal(<?php echo htmlspecialchars(json_encode($product)); ?>)" 
-                                        class="btn">แก้ไข</button>
-                                <form method="POST" style="display: inline;" 
-                                      onsubmit="return confirm('ลบสินค้านี้?')">
-                                    <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
-                                    <button type="submit" name="delete_product" class="btn btn-red">ลบ</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+            <div class="card">
+                <div class="card-header">
+                    <h3>รายการสินค้าทั้งหมด</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="productsTable">
+                            <thead>
+                                <tr>
+                                    <th>รูป</th>
+                                    <th>ชื่อสินค้า</th>
+                                    <th>ราคา</th>
+                                    <th>สต็อก</th>
+                                    <th>หมวดหมู่</th>
+                                    <th>ร้านค้า</th>
+                                    <th>จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while ($product = $products->fetch_assoc()): ?>
+                                    <tr data-category="<?php echo $product['category_id']; ?>" data-store="<?php echo $product['store_id']; ?>">
+                                        <td>
+                                            <?php if ($product['image'] && file_exists("../assets/images/" . $product['image'])): ?>
+                                                <img src="../assets/images/<?php echo $product['image']; ?>" 
+                                                     alt="<?php echo $product['product_name']; ?>" 
+                                                     class="product-image-thumb">
+                                            <?php else: ?>
+                                                <div class="no-image-thumb">
+                                                    <i class="fas fa-image"></i>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($product['product_name']); ?></strong>
+                                            <br>
+                                            <small style="color: var(--secondary);"><?php echo substr($product['product_description'], 0, 50); ?>...</small>
+                                        </td>
+                                        <td><strong style="color: var(--primary);">฿<?php echo number_format($product['price'], 2); ?></strong></td>
+                                        <td>
+                                            <?php
+                                            $stock_class = 'stock-high';
+                                            if ($product['stock'] < 5) {
+                                                $stock_class = 'stock-low';
+                                            } elseif ($product['stock'] < 20) {
+                                                $stock_class = 'stock-medium';
+                                            }
+                                            ?>
+                                            <span class="stock-badge <?php echo $stock_class; ?>">
+                                                <?php echo $product['stock']; ?> ชิ้น
+                                            </span>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($product['category_name']); ?></td>
+                                        <td><?php echo htmlspecialchars($product['store_name']); ?></td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <button class="btn btn-primary btn-sm" onclick="editProduct(<?php echo htmlspecialchars(json_encode($product)); ?>)">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-danger btn-sm" onclick="deleteProduct(<?php echo $product['id']; ?>)">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
     <!-- Add Product Modal -->
-    <div id="addModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeAddModal()">&times;</span>
-            <h2>เพิ่มสินค้าใหม่</h2>
-            <form method="POST" enctype="multipart/form-data" onsubmit="return validateForm()">
-                <div class="form-group">
-                    <label>ชื่อสินค้า <span style="color: red;">*</span></label>
-                    <input type="text" name="product_name" id="add_name" class="form-control" required>
+    <div class="modal" id="addModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>เพิ่มสินค้าใหม่</h3>
+                <button class="modal-close" onclick="closeModal('addModal')">&times;</button>
+            </div>
+            <form method="POST" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>ชื่อสินค้า *</label>
+                            <input type="text" name="product_name" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>ราคา *</label>
+                            <input type="number" name="price" class="form-control" step="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>จำนวนในสต็อก *</label>
+                            <input type="number" name="stock" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>หมวดหมู่ *</label>
+                            <select name="category_id" class="form-control" required>
+                                <option value="">เลือกหมวดหมู่</option>
+                                <?php 
+                                $categories->data_seek(0);
+                                while ($cat = $categories->fetch_assoc()): 
+                                ?>
+                                    <option value="<?php echo $cat['id']; ?>"><?php echo $cat['category_name']; ?></option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>ร้านค้า *</label>
+                            <select name="store_id" class="form-control" required>
+                                <option value="">เลือกร้านค้า</option>
+                                <?php 
+                                $stores->data_seek(0);
+                                while ($store = $stores->fetch_assoc()): 
+                                ?>
+                                    <option value="<?php echo $store['id']; ?>"><?php echo $store['store_name']; ?></option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>รายละเอียดสินค้า</label>
+                            <textarea name="product_description" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>รูปภาพสินค้า</label>
+                            <div class="image-upload" onclick="document.getElementById('addImage').click()">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>คลิกเพื่อเลือกรูปภาพ</p>
+                                <input type="file" id="addImage" name="image" accept="image/*" style="display: none;" onchange="previewAddImage(this)">
+                            </div>
+                            <img id="addImagePreview" class="image-preview" style="display: none;">
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <label>รายละเอียด</label>
-                    <textarea name="product_description" id="add_description" class="form-control" rows="3"></textarea>
+                <div class="modal-footer">
+                    <button type="submit" name="add_product" class="btn btn-success">บันทึก</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">ยกเลิก</button>
                 </div>
-                
-                <div class="form-group">
-                    <label>ราคา <span style="color: red;">*</span></label>
-                    <input type="number" name="price" id="add_price" class="form-control" step="0.01" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>จำนวนในสต็อก <span style="color: red;">*</span></label>
-                    <input type="number" name="stock" id="add_stock" class="form-control" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>หมวดหมู่ <span style="color: red;">*</span></label>
-                    <select name="category_id" id="add_category" class="form-control" required>
-                        <option value="">เลือกหมวดหมู่</option>
-                        <?php 
-                        $categories->data_seek(0);
-                        while ($cat = $categories->fetch_assoc()): 
-                        ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo $cat['category_name']; ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>ร้านค้า <span style="color: red;">*</span></label>
-                    <select name="store_id" id="add_store" class="form-control" required>
-                        <option value="">เลือกร้านค้า</option>
-                        <?php 
-                        $stores->data_seek(0);
-                        while ($store = $stores->fetch_assoc()): 
-                        ?>
-                            <option value="<?php echo $store['id']; ?>"><?php echo $store['store_name']; ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>รูปภาพสินค้า</label>
-                    <input type="file" name="image" id="add_image" class="form-control" accept="image/*" onchange="previewAddImage(this)">
-                    <img id="add_image_preview" class="image-preview" style="display: none;">
-                </div>
-                
-                <button type="submit" name="add_product" class="btn">บันทึก</button>
-                <button type="button" onclick="closeAddModal()" class="btn btn-red">ยกเลิก</button>
             </form>
         </div>
     </div>
     
     <!-- Edit Product Modal -->
-    <div id="editModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeEditModal()">&times;</span>
-            <h2>แก้ไขสินค้า</h2>
-            <form method="POST" enctype="multipart/form-data" onsubmit="return validateEditForm()">
+    <div class="modal" id="editModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>แก้ไขสินค้า</h3>
+                <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+            </div>
+            <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="product_id" id="edit_id">
                 <input type="hidden" name="current_image" id="edit_current_image">
                 
-                <div class="form-group">
-                    <label>ชื่อสินค้า <span style="color: red;">*</span></label>
-                    <input type="text" name="product_name" id="edit_name" class="form-control" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>รายละเอียด</label>
-                    <textarea name="product_description" id="edit_description" class="form-control" rows="3"></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>ราคา <span style="color: red;">*</span></label>
-                    <input type="number" name="price" id="edit_price" class="form-control" step="0.01" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>จำนวนในสต็อก <span style="color: red;">*</span></label>
-                    <input type="number" name="stock" id="edit_stock" class="form-control" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>หมวดหมู่ <span style="color: red;">*</span></label>
-                    <select name="category_id" id="edit_category" class="form-control" required>
-                        <option value="">เลือกหมวดหมู่</option>
-                        <?php 
-                        $categories->data_seek(0);
-                        while ($cat = $categories->fetch_assoc()): 
-                        ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo $cat['category_name']; ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>ร้านค้า <span style="color: red;">*</span></label>
-                    <select name="store_id" id="edit_store" class="form-control" required>
-                        <option value="">เลือกร้านค้า</option>
-                        <?php 
-                        $stores->data_seek(0);
-                        while ($store = $stores->fetch_assoc()): 
-                        ?>
-                            <option value="<?php echo $store['id']; ?>"><?php echo $store['store_name']; ?></option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>รูปภาพปัจจุบัน</label>
-                    <div>
-                        <img id="current_image_display" class="image-preview" style="max-width: 200px;">
+                <div class="modal-body">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>ชื่อสินค้า *</label>
+                            <input type="text" name="product_name" id="edit_name" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>ราคา *</label>
+                            <input type="number" name="price" id="edit_price" class="form-control" step="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>จำนวนในสต็อก *</label>
+                            <input type="number" name="stock" id="edit_stock" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>หมวดหมู่ *</label>
+                            <select name="category_id" id="edit_category" class="form-control" required>
+                                <option value="">เลือกหมวดหมู่</option>
+                                <?php 
+                                $categories->data_seek(0);
+                                while ($cat = $categories->fetch_assoc()): 
+                                ?>
+                                    <option value="<?php echo $cat['id']; ?>"><?php echo $cat['category_name']; ?></option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>ร้านค้า *</label>
+                            <select name="store_id" id="edit_store" class="form-control" required>
+                                <option value="">เลือกร้านค้า</option>
+                                <?php 
+                                $stores->data_seek(0);
+                                while ($store = $stores->fetch_assoc()): 
+                                ?>
+                                    <option value="<?php echo $store['id']; ?>"><?php echo $store['store_name']; ?></option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>รายละเอียดสินค้า</label>
+                            <textarea name="product_description" id="edit_description" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>รูปภาพปัจจุบัน</label>
+                            <img id="currentImageDisplay" class="image-preview" style="max-width: 150px;">
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1/-1;">
+                            <label>เปลี่ยนรูปภาพใหม่</label>
+                            <div class="image-upload" onclick="document.getElementById('editImage').click()">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>คลิกเพื่อเลือกรูปภาพใหม่</p>
+                                <input type="file" id="editImage" name="image" accept="image/*" style="display: none;" onchange="previewEditImage(this)">
+                            </div>
+                            <img id="editImagePreview" class="image-preview" style="display: none;">
+                        </div>
                     </div>
                 </div>
-                
-                <div class="form-group">
-                    <label>อัปโหลดรูปภาพใหม่ (ถ้าต้องการเปลี่ยน)</label>
-                    <input type="file" name="image" id="edit_image" class="form-control" accept="image/*" onchange="previewEditImage(this)">
-                    <img id="edit_image_preview" class="image-preview" style="display: none;">
+                <div class="modal-footer">
+                    <button type="submit" name="edit_product" class="btn btn-success">บันทึก</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')">ยกเลิก</button>
                 </div>
-                
-                <button type="submit" name="edit_product" class="btn">บันทึก</button>
-                <button type="button" onclick="closeEditModal()" class="btn btn-red">ปิด</button>
             </form>
         </div>
     </div>
     
     <script>
-    // Add Modal Functions
-    function openAddModal() {
-        document.getElementById('addModal').style.display = 'block';
-        document.getElementById('add_name').value = '';
-        document.getElementById('add_description').value = '';
-        document.getElementById('add_price').value = '';
-        document.getElementById('add_stock').value = '';
-        document.getElementById('add_category').value = '';
-        document.getElementById('add_store').value = '';
-        document.getElementById('add_image').value = '';
-        document.getElementById('add_image_preview').style.display = 'none';
+    // Modal functions
+    function showModal(modalId) {
+        document.getElementById(modalId).classList.add('active');
     }
     
-    function closeAddModal() {
-        document.getElementById('addModal').style.display = 'none';
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
     }
     
-    // Edit Modal Functions
-    function openEditModal(product) {
+    function showAddModal() {
+        document.getElementById('addModal').classList.add('active');
+    }
+    
+    function editProduct(product) {
         document.getElementById('edit_id').value = product.id;
         document.getElementById('edit_name').value = product.product_name;
         document.getElementById('edit_description').value = product.product_description;
@@ -479,29 +586,31 @@ $stores = $conn->query("SELECT * FROM stores ORDER BY store_name");
         document.getElementById('edit_store').value = product.store_id;
         document.getElementById('edit_current_image').value = product.image;
         
-        // Show current image
-        const currentImageDisplay = document.getElementById('current_image_display');
         if (product.image) {
-            currentImageDisplay.src = '../assets/images/' + product.image;
-            currentImageDisplay.style.display = 'block';
+            document.getElementById('currentImageDisplay').src = '../assets/images/' + product.image;
+            document.getElementById('currentImageDisplay').style.display = 'block';
         } else {
-            currentImageDisplay.style.display = 'none';
+            document.getElementById('currentImageDisplay').style.display = 'none';
         }
         
-        // Hide preview
-        document.getElementById('edit_image_preview').style.display = 'none';
-        document.getElementById('edit_image').value = '';
+        document.getElementById('editImagePreview').style.display = 'none';
+        document.getElementById('editImage').value = '';
         
-        document.getElementById('editModal').style.display = 'block';
+        showModal('editModal');
     }
     
-    function closeEditModal() {
-        document.getElementById('editModal').style.display = 'none';
+    function deleteProduct(id) {
+        if (confirm('ต้องการลบสินค้านี้? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `<input type="hidden" name="product_id" value="${id}"><input type="hidden" name="delete_product" value="1">`;
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
     
-    // Image Preview Functions
     function previewAddImage(input) {
-        const preview = document.getElementById('add_image_preview');
+        const preview = document.getElementById('addImagePreview');
         if (input.files && input.files[0]) {
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -513,7 +622,7 @@ $stores = $conn->query("SELECT * FROM stores ORDER BY store_name");
     }
     
     function previewEditImage(input) {
-        const preview = document.getElementById('edit_image_preview');
+        const preview = document.getElementById('editImagePreview');
         if (input.files && input.files[0]) {
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -524,40 +633,45 @@ $stores = $conn->query("SELECT * FROM stores ORDER BY store_name");
         }
     }
     
-    // Form Validation
-    function validateForm() {
-        const name = document.getElementById('add_name').value;
-        const price = document.getElementById('add_price').value;
-        const stock = document.getElementById('add_stock').value;
-        const category = document.getElementById('add_category').value;
-        const store = document.getElementById('add_store').value;
+    function filterProducts() {
+        const searchText = document.getElementById('searchInput').value.toLowerCase();
+        const categoryFilter = document.getElementById('categoryFilter').value;
+        const storeFilter = document.getElementById('storeFilter').value;
+        const table = document.getElementById('productsTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
         
-        if (!name || !price || !stock || !category || !store) {
-            alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-            return false;
+        for (let row of rows) {
+            const category = row.getAttribute('data-category');
+            const store = row.getAttribute('data-store');
+            const cells = row.getElementsByTagName('td');
+            let found = false;
+            
+            // Check category and store filters
+            if (categoryFilter && category != categoryFilter) {
+                row.style.display = 'none';
+                continue;
+            }
+            if (storeFilter && store != storeFilter) {
+                row.style.display = 'none';
+                continue;
+            }
+            
+            // Check search text
+            for (let cell of cells) {
+                if (cell.textContent.toLowerCase().includes(searchText)) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            row.style.display = found ? '' : 'none';
         }
-        return true;
-    }
-    
-    function validateEditForm() {
-        const name = document.getElementById('edit_name').value;
-        const price = document.getElementById('edit_price').value;
-        const stock = document.getElementById('edit_stock').value;
-        const category = document.getElementById('edit_category').value;
-        const store = document.getElementById('edit_store').value;
-        
-        if (!name || !price || !stock || !category || !store) {
-            alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-            return false;
-        }
-        return true;
     }
     
     // Close modal when clicking outside
     window.onclick = function(event) {
         if (event.target.classList.contains('modal')) {
-            closeAddModal();
-            closeEditModal();
+            event.target.classList.remove('active');
         }
     }
     </script>
