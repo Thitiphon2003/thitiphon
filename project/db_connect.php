@@ -3,7 +3,7 @@
 $host = 'localhost';
 $dbname = 'shop_db';
 $username = 'root';
-$password = 'r660109';
+$password = '';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
@@ -26,48 +26,33 @@ try {
         return query($sql, $params)->fetch();
     }
     
-    function insert($table, $data) {
-        global $pdo;
-        $columns = implode(', ', array_keys($data));
-        $placeholders = ':' . implode(', :', array_keys($data));
-        
-        $sql = "INSERT INTO $table ($columns) VALUES ($placeholders)";
-        $stmt = $pdo->prepare($sql);
-        
-        foreach($data as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
-        
-        $stmt->execute();
-        return $pdo->lastInsertId();
-    }
+    // ========== ฟังก์ชันจัดการโฟลเดอร์ ==========
     
-    function update($table, $data, $where, $whereParams = []) {
-        global $pdo;
-        $set = [];
-        foreach(array_keys($data) as $key) {
-            $set[] = "$key = :$key";
+    /**
+     * ตรวจสอบและสร้างโฟลเดอร์ พร้อมตั้งสิทธิ์
+     */
+    function ensureUploadDirectory($folder = 'products') {
+        $upload_dir = "uploads/$folder/";
+        
+        // สร้างโฟลเดอร์ uploads ก่อนถ้ายังไม่มี
+        if (!file_exists('uploads')) {
+            mkdir('uploads', 0777, true);
+            chmod('uploads', 0777);
         }
         
-        $sql = "UPDATE $table SET " . implode(', ', $set) . " WHERE $where";
-        $stmt = $pdo->prepare($sql);
-        
-        foreach($data as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
-        foreach($whereParams as $key => $value) {
-            $stmt->bindValue(":$key", $value);
+        // สร้างโฟลเดอร์ย่อย
+        if (!file_exists($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+            chmod($upload_dir, 0777);
         }
         
-        return $stmt->execute();
+        // ตรวจสอบสิทธิ์การเขียน
+        if (!is_writable($upload_dir)) {
+            chmod($upload_dir, 0777);
+        }
+        
+        return is_writable($upload_dir);
     }
-    
-    function delete($table, $where, $params = []) {
-        $sql = "DELETE FROM $table WHERE $where";
-        return query($sql, $params)->rowCount();
-    }
-    
-    // ========== ฟังก์ชันจัดการรูปภาพ (พื้นฐาน) ==========
     
     /**
      * แสดงรูปภาพ

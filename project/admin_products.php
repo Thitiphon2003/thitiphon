@@ -7,6 +7,11 @@ error_reporting(E_ALL);
 session_start();
 require_once 'db_connect.php';
 
+// ตรวจสอบและสร้างโฟลเดอร์ uploads/products/
+if (!ensureUploadDirectory('products')) {
+    die("ไม่สามารถสร้างหรือเข้าถึงโฟลเดอร์ uploads/products/ ได้ กรุณาตรวจสอบสิทธิ์");
+}
+
 // ตรวจสอบการเข้าสู่ระบบแอดมิน
 if(!isset($_SESSION['admin_id'])) {
     header('Location: admin_login.php');
@@ -26,12 +31,8 @@ $success_message = '';
 $error_message = '';
 
 // ============================================
-// ฟังก์ชันจัดการรูปภาพ (เฉพาะใน admin_products.php)
+// ฟังก์ชันอัปโหลดรูปภาพ
 // ============================================
-
-/**
- * อัปโหลดรูปภาพสินค้าและบันทึกลงฐานข้อมูล
- */
 function uploadProductImage($file, $product_id, $is_primary = false) {
     global $pdo;
     
@@ -42,19 +43,9 @@ function uploadProductImage($file, $product_id, $is_primary = false) {
     
     $upload_dir = "uploads/products/";
     
-    // สร้างโฟลเดอร์ถ้ายังไม่มี
-    if (!file_exists($upload_dir)) {
-        if (!mkdir($upload_dir, 0777, true)) {
-            return ['success' => false, 'message' => 'ไม่สามารถสร้างโฟลเดอร์ uploads/products/ ได้'];
-        }
-    }
-    
-    // ตรวจสอบสิทธิ์การเขียน
-    if (!is_writable($upload_dir)) {
-        chmod($upload_dir, 0777);
-        if (!is_writable($upload_dir)) {
-            return ['success' => false, 'message' => 'โฟลเดอร์ uploads/products/ ไม่สามารถเขียนได้'];
-        }
+    // ตรวจสอบโฟลเดอร์อีกครั้ง
+    if (!ensureUploadDirectory('products')) {
+        return ['success' => false, 'message' => 'โฟลเดอร์ uploads/products/ ไม่สามารถเขียนได้'];
     }
     
     // ตรวจสอบข้อผิดพลาด
@@ -845,7 +836,7 @@ if(isset($_GET['edit'])) {
                             <textarea class="form-control" name="description" rows="3"><?php echo htmlspecialchars($edit_product['description'] ?? ''); ?></textarea>
                         </div>
                         
-                        <!-- รูปภาพที่มีอยู่แล้ว (ดึงจากฐานข้อมูล) -->
+                        <!-- รูปภาพที่มีอยู่แล้ว -->
                         <?php if(!empty($edit_images)): ?>
                         <div class="mb-3">
                             <label class="form-label">รูปภาพที่มีอยู่</label>
