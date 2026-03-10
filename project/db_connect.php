@@ -29,29 +29,34 @@ try {
     // ========== ฟังก์ชันจัดการโฟลเดอร์ ==========
     
     /**
-     * ตรวจสอบและสร้างโฟลเดอร์ พร้อมตั้งสิทธิ์
+     * ตรวจสอบและสร้างโฟลเดอร์ (ไม่ใช้ chmod)
      */
     function ensureUploadDirectory($folder = 'products') {
         $upload_dir = "uploads/$folder/";
         
         // สร้างโฟลเดอร์ uploads ก่อนถ้ายังไม่มี
         if (!file_exists('uploads')) {
-            mkdir('uploads', 0777, true);
-            chmod('uploads', 0777);
+            if (!mkdir('uploads', 0755, true)) {
+                error_log("ไม่สามารถสร้างโฟลเดอร์ uploads ได้");
+                return false;
+            }
         }
         
         // สร้างโฟลเดอร์ย่อย
         if (!file_exists($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-            chmod($upload_dir, 0777);
+            if (!mkdir($upload_dir, 0755, true)) {
+                error_log("ไม่สามารถสร้างโฟลเดอร์ $upload_dir ได้");
+                return false;
+            }
         }
         
-        // ตรวจสอบสิทธิ์การเขียน
+        // ตรวจสอบสิทธิ์การเขียน (ไม่พยายามเปลี่ยนสิทธิ์)
         if (!is_writable($upload_dir)) {
-            chmod($upload_dir, 0777);
+            error_log("โฟลเดอร์ $upload_dir ไม่สามารถเขียนได้");
+            return false;
         }
         
-        return is_writable($upload_dir);
+        return true;
     }
     
     /**
