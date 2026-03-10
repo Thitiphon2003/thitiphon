@@ -3,11 +3,6 @@ require_once 'connectdb.php';
 require_once 'includes/config.php';
 include 'includes/new-header.php';
 
-// Test database connection
-if (!testConnection($conn)) {
-    echo showError("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
-}
-
 // Fetch featured products
 $featured_query = "SELECT p.*, c.category_name, s.store_name 
                   FROM products p 
