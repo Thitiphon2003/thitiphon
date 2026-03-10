@@ -994,3 +994,208 @@ body {
         margin: 0 auto;
     }
 }
+/* เพิ่มส่วนนี้ต่อจาก CSS เดิม */
+
+/* Menu Badges */
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--primary-red);
+    color: var(--white);
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* Desktop Menu Enhancements */
+.desktop-menu {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.desktop-menu::-webkit-scrollbar {
+    width: 5px;
+}
+
+.desktop-menu::-webkit-scrollbar-track {
+    background: var(--light-gray);
+}
+
+.desktop-menu::-webkit-scrollbar-thumb {
+    background: var(--primary-blue);
+    border-radius: 5px;
+}
+
+.menu-items li a {
+    position: relative;
+}
+
+.menu-items li a .cart-badge,
+.menu-items li a .notification-badge {
+    position: static;
+    margin-left: 0.5rem;
+    display: inline-block;
+}
+
+/* Mobile Menu Enhancements */
+.mobile-menu-items li a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mobile-menu-items li a .cart-badge,
+.mobile-menu-items li a .notification-badge {
+    position: static;
+    margin-left: 0.5rem;
+}
+
+/* Active Menu Item */
+.menu-items a.active,
+.mobile-menu-items a.active {
+    background: var(--light-gray);
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+.menu-items a.active i,
+.mobile-menu-items a.active i {
+    color: var(--primary-blue);
+}
+
+/* User Avatar Animation */
+.user-avatar {
+    transition: transform 0.3s ease;
+}
+
+.user-avatar:hover {
+    transform: scale(1.1);
+}
+
+/* Menu Footer */
+.menu-footer {
+    background: linear-gradient(135deg, var(--primary-light), var(--primary));
+    color: white;
+    padding: 1rem;
+    text-align: center;
+}
+
+.menu-footer p {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+/* Quick Stats in Menu */
+.menu-stats {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 0.5rem;
+    background: var(--light);
+    border-radius: 8px;
+}
+
+.stat-item .number {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.stat-item .label {
+    font-size: 0.75rem;
+    color: var(--secondary);
+}
+
+/* Responsive adjustments for menu */
+@media (max-width: 768px) {
+    .desktop-menu {
+        display: none; /* Hide desktop menu on mobile */
+    }
+    
+    .mobile-menu {
+        width: 85%;
+        max-width: 350px;
+    }
+    
+    .mobile-menu-header {
+        padding: 2rem 1.5rem;
+    }
+    
+    .mobile-menu-items a {
+        padding: 1rem 1.5rem;
+        font-size: 1rem;
+    }
+    
+    .mobile-menu-footer {
+        padding: 1.5rem;
+    }
+    
+    .mobile-menu-footer .btn {
+        margin-bottom: 0.75rem;
+    }
+}
+
+@media (min-width: 769px) {
+    .mobile-menu,
+    .mobile-menu-overlay {
+        display: none !important; /* Hide mobile menu on desktop */
+    }
+}
+
+/* Menu Transition Animations */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.mobile-menu.active {
+    animation: slideIn 0.3s ease forwards;
+}
+
+.mobile-menu:not(.active) {
+    animation: slideOut 0.3s ease forwards;
+}
+
+/* Desktop Menu Animation */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.desktop-menu.active {
+    animation: fadeInDown 0.3s ease forwards;
+}

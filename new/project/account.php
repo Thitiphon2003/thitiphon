@@ -136,6 +136,11 @@ include 'includes/new-header.php';
                             <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
                         </a>
                     </li>
+                    <li style="margin-bottom: 0.75rem;">
+                        <a href="orders.php" style="text-decoration: none; color: var(--dark-gray); display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-history" style="color: var(--primary-blue);"></i> ประวัติการสั่งซื้อ
+                        </a>
+                    </li>
                 </ul>
             </div>
         </div>

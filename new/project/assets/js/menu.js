@@ -34,17 +34,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Mobile Menu Toggle (สามารถเปิดจากปุ่มอะไรก็ได้ที่ต้องการ)
-    // ถ้าต้องการให้ desktop hamburger เปิด mobile menu บนมือถือ
-    if (window.innerWidth <= 768) {
-        if (desktopHamburger) {
-            desktopHamburger.addEventListener('click', function(e) {
+    // Mobile Menu Toggle (เปิดจาก desktop hamburger บนมือถือ)
+    if (desktopHamburger) {
+        desktopHamburger.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
                 e.preventDefault();
                 mobileMenu.classList.add('active');
                 mobileMenuOverlay.classList.add('active');
                 document.body.style.overflow = 'hidden';
-            });
-        }
+                desktopHamburger.classList.remove('active');
+                desktopMenu.classList.remove('active');
+            }
+        });
     }
     
     // Close mobile menu
@@ -72,19 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle window resize
     window.addEventListener('resize', function() {
         if (window.innerWidth > 768) {
-            // ถ้าหน้าจอใหญ่กว่า 768px ให้ปิด mobile menu
             closeMobileMenuFunc();
-        } else {
-            // ถ้าหน้าจอเล็กกว่า 768px ให้ desktop hamburger เปิด mobile menu
-            if (desktopHamburger) {
-                desktopHamburger.removeEventListener('click', function(){});
-                desktopHamburger.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    mobileMenu.classList.add('active');
-                    mobileMenuOverlay.classList.add('active');
-                    document.body.style.overflow = 'hidden';
-                });
-            }
         }
     });
     
@@ -101,20 +90,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Prevent body scrolling when mobile menu is open
-    if (mobileMenu) {
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.attributeName === 'class') {
-                    if (mobileMenu.classList.contains('active')) {
-                        document.body.style.overflow = 'hidden';
+    // Update cart count and notification count periodically (optional)
+    function updateCounts() {
+        fetch('get-counts.php')
+            .then(response => response.json())
+            .then(data => {
+                // Update cart badges
+                const cartBadges = document.querySelectorAll('.cart-badge');
+                cartBadges.forEach(badge => {
+                    if (data.cart_count > 0) {
+                        badge.textContent = data.cart_count;
+                        badge.style.display = 'inline';
                     } else {
-                        document.body.style.overflow = '';
+                        badge.style.display = 'none';
                     }
-                }
-            });
-        });
-        
-        observer.observe(mobileMenu, { attributes: true });
+                });
+                
+                // Update notification badges
+                const notifyBadges = document.querySelectorAll('.notification-badge');
+                notifyBadges.forEach(badge => {
+                    if (data.notify_count > 0) {
+                        badge.textContent = data.notify_count;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                });
+            })
+            .catch(error => console.error('Error updating counts:', error));
     }
+    
+    // Update every 30 seconds
+    // setInterval(updateCounts, 30000);
 });

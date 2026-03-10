@@ -14,6 +14,16 @@ if (isset($_SESSION['user_id'])) {
     }
 }
 
+// Get unread notifications count
+$notify_count = 0;
+if (isset($_SESSION['user_id'])) {
+    $notify_query = "SELECT COUNT(*) as count FROM notifications WHERE user_id = {$_SESSION['user_id']} AND is_read = FALSE";
+    $notify_result = $conn->query($notify_query);
+    if ($notify_result && $notify_result->num_rows > 0) {
+        $notify_count = $notify_result->fetch_assoc()['count'];
+    }
+}
+
 // Get user info for menu
 $user = null;
 if (isset($_SESSION['user_id'])) {
@@ -66,6 +76,9 @@ $base_url = "http://103.114.201.254/thitiphon/new/project/";
             </a></li>
             <li><a href="notifications.php" class="<?php echo $current_page == 'notifications.php' ? 'active' : ''; ?>">
                 <i class="far fa-bell"></i> การแจ้งเตือน
+                <?php if ($notify_count > 0): ?>
+                    <span class="cart-badge" style="background: var(--primary-red);"><?php echo $notify_count; ?></span>
+                <?php endif; ?>
             </a></li>
             <li><a href="cart.php" class="<?php echo $current_page == 'cart.php' ? 'active' : ''; ?>">
                 <i class="fas fa-shopping-cart"></i> ตะกร้าสินค้า
@@ -76,6 +89,9 @@ $base_url = "http://103.114.201.254/thitiphon/new/project/";
             <?php if (isset($_SESSION['user_id'])): ?>
                 <li><a href="account.php" class="<?php echo $current_page == 'account.php' ? 'active' : ''; ?>">
                     <i class="far fa-user"></i> บัญชีของฉัน
+                </a></li>
+                <li><a href="orders.php" class="<?php echo $current_page == 'orders.php' ? 'active' : ''; ?>">
+                    <i class="fas fa-history"></i> ประวัติการสั่งซื้อ
                 </a></li>
                 <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] == 'admin'): ?>
                     <li><a href="admin/">
@@ -98,6 +114,14 @@ $base_url = "http://103.114.201.254/thitiphon/new/project/";
                     <i class="fas fa-user-plus"></i> สมัครสมาชิก
                 </a>
             <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="top-bar-content">
+            <span>📦 จัดส่งฟรี เมื่อซื้อครบ 500 บาท</span>
+            <span>🎉 สมาชิกใหม่ รับส่วนลด 100 บาท</span>
         </div>
     </div>
 
@@ -145,6 +169,9 @@ $base_url = "http://103.114.201.254/thitiphon/new/project/";
                     </a></li>
                     <li><a href="notifications.php">
                         <i class="far fa-bell"></i> การแจ้งเตือน
+                        <?php if ($notify_count > 0): ?>
+                            <span class="cart-badge" style="background: var(--primary-red);"><?php echo $notify_count; ?></span>
+                        <?php endif; ?>
                     </a></li>
                     <li><a href="cart.php">
                         <i class="fas fa-shopping-cart"></i> ตะกร้าสินค้า
@@ -155,6 +182,9 @@ $base_url = "http://103.114.201.254/thitiphon/new/project/";
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <li><a href="account.php">
                             <i class="far fa-user"></i> บัญชีของฉัน
+                        </a></li>
+                        <li><a href="orders.php">
+                            <i class="fas fa-history"></i> ประวัติการสั่งซื้อ
                         </a></li>
                         <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] == 'admin'): ?>
                             <li><a href="admin/">
