@@ -1,11 +1,10 @@
 <?php
-// Database configuration for server 103.114.201.254
-$user = "root";              // Database username
-$pwd = "r669109";           // Database password
-$db = "ecommerce_db";             // Database name
-
-// Create connection
-$conn = new mysqli($host, $user, $pwd, $db);
+		$host = "localhost";
+		$user = "root";
+		$pwd = "r660109";
+		$db = "ecommerce_db";
+		$conn = mysqli_connect($host, $user, $pwd, $db) or die ("เชื่อมต่อฐานข้อมูลไม่ได้");
+		mysqli_query($conn, "SET NAMES utf8");
 
 // Check connection
 if ($conn->connect_error) {
