@@ -3,7 +3,7 @@
 $host = "103.114.201.254";  // Server IP
 $user = "root";              // Database username
 $pwd = "r669109";           // Database password
-$db = "4140db";             // Database name
+$db = "ecommerce_db";             // Database name
 
 // Create connection
 $conn = new mysqli($host, $user, $pwd, $db);
