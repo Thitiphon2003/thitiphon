@@ -1,6 +1,6 @@
 <?php
 // Database configuration for server 103.114.201.254
-$host = "103.114.201.254";  // Server IP
+$host = "localhost";  // Server IP
 $user = "root";              // Database username
 $pwd = "r669109";           // Database password
 $db = "ecommerce_db";             // Database name
