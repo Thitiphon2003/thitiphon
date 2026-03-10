@@ -1,14 +1,20 @@
 <?php
+require_once 'connectdb.php';
 require_once 'includes/config.php';
 include 'includes/new-header.php';
 
+// Test database connection
+if (!testConnection($conn)) {
+    echo showError("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
+}
+
 // Fetch featured products
 $featured_query = "SELECT p.*, c.category_name, s.store_name 
-                    FROM products p 
-                    LEFT JOIN categories c ON p.category_id = c.id 
-                    LEFT JOIN stores s ON p.store_id = s.id 
-                    ORDER BY p.created_at DESC 
-                    LIMIT 3";
+                  FROM products p 
+                  LEFT JOIN categories c ON p.category_id = c.id 
+                  LEFT JOIN stores s ON p.store_id = s.id 
+                  ORDER BY p.created_at DESC 
+                  LIMIT 3";
 $featured_products = $conn->query($featured_query);
 ?>
 

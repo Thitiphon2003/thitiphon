@@ -24,12 +24,16 @@ if (isset($_SESSION['user_id'])) {
 
 // Get current page for active menu
 $current_page = basename($_SERVER['PHP_SELF']);
+
+// Base URL
+$base_url = "http://103.114.201.254/thitiphon/new/project/";
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="<?php echo $base_url; ?>">
     <title>ShopHub - ช้อปปิ้งออนไลน์ที่ทันสมัย</title>
     <link rel="stylesheet" href="assets/css/new-style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

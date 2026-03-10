@@ -1,4 +1,5 @@
 <?php
+require_once 'connectdb.php';
 require_once 'includes/config.php';
 
 // 1. ลบข้อมูล admin เดิมทิ้ง

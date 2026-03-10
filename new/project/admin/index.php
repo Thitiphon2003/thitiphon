@@ -1,5 +1,6 @@
 <?php
-require_once '../includes/config.php';
+require_once 'connectdb.php';
+require_once 'includes/config.php';
 
 // Check if user is admin
 if (!isAdmin()) {

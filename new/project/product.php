@@ -1,4 +1,5 @@
 <?php
+require_once 'connectdb.php';
 require_once 'includes/config.php';
 include 'includes/new-header.php';
 
