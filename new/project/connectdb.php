@@ -22,14 +22,6 @@ if (!$conn->set_charset("utf8")) {
     $conn->query("SET NAMES utf8");
 }
 
-// Success message (สามารถลบได้หลังจากทดสอบ)
-echo "<div style='background: #d4edda; color: #155724; padding: 1rem; margin: 1rem; border-radius: 5px; border-left: 4px solid #28a745;'>
-        <strong>✅ เชื่อมต่อฐานข้อมูลสำเร็จ!</strong><br>
-        Host: " . $host . "<br>
-        Database: " . $db . "<br>
-        Time: " . date('Y-m-d H:i:s') . "
-      </div>";
-
 // Function to test connection
 function testConnection($conn) {
     $test = $conn->query("SELECT 1");
