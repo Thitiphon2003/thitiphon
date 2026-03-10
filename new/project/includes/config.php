@@ -11,7 +11,7 @@ ini_set('display_errors', 1);
 // Database configuration
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
-define('DB_PASS', 'r669109');
+define('DB_PASS', 'r660109');
 define('DB_NAME', 'ecommerce_db');
 
 // แสดงข้อมูลการเชื่อมต่อ (สำหรับ debug)
