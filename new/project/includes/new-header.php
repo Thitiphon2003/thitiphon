@@ -117,13 +117,6 @@ $base_url = "http://103.114.201.254/thitiphon/new/project/";
         </div>
     </div>
 
-    <!-- Top Bar -->
-    <div class="top-bar">
-        <div class="top-bar-content">
-            <span>📦 จัดส่งฟรี เมื่อซื้อครบ 500 บาท</span>
-            <span>🎉 สมาชิกใหม่ รับส่วนลด 100 บาท</span>
-        </div>
-    </div>
 
     <!-- Header -->
     <header class="header">
