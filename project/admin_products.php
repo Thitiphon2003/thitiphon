@@ -30,7 +30,7 @@ $error_message = '';
 // ============================================
 
 /**
- * อัปโหลดรูปภาพสินค้า
+ * อัปโหลดรูปภาพสินค้าและบันทึกลงฐานข้อมูล
  */
 function uploadProductImage($file, $product_id, $is_primary = false) {
     global $pdo;
@@ -94,7 +94,7 @@ function uploadProductImage($file, $product_id, $is_primary = false) {
         return ['success' => false, 'message' => 'นามสกุลไฟล์ไม่ถูกต้อง'];
     }
     
-    // สร้างชื่อไฟล์ตาม ID สินค้า
+    // สร้างชื่อไฟล์ตาม ID สินค้า + เวลา
     $timestamp = time();
     $filename = $product_id . '_' . $timestamp . '.' . $extension;
     $target_path = $upload_dir . $filename;
@@ -183,27 +183,33 @@ if(isset($_GET['delete_image'])) {
     $image_id = (int)$_GET['delete_image'];
     $product_id = (int)$_GET['product_id'];
     
-    // ตรวจสอบว่าเป็นรูปหลักหรือไม่
+    // ดึงข้อมูลรูปภาพ
     $image = fetchOne("SELECT * FROM product_images WHERE id = ?", [$image_id]);
-    if ($image && $image['is_primary']) {
-        // หารูปอื่นมาเป็นรูปหลักแทน
-        $other = fetchOne("SELECT id FROM product_images WHERE product_id = ? AND id != ? ORDER BY sort_order LIMIT 1", 
-                         [$product_id, $image_id]);
-        if ($other) {
-            query("UPDATE product_images SET is_primary = 1 WHERE id = ?", [$other['id']]);
+    if ($image) {
+        // ตรวจสอบว่าเป็นรูปหลักหรือไม่
+        if ($image['is_primary']) {
+            // หารูปอื่นมาเป็นรูปหลักแทน
+            $other = fetchOne("SELECT id FROM product_images WHERE product_id = ? AND id != ? ORDER BY sort_order LIMIT 1", 
+                             [$product_id, $image_id]);
+            if ($other) {
+                query("UPDATE product_images SET is_primary = 1 WHERE id = ?", [$other['id']]);
+            }
         }
+        
+        // ลบไฟล์รูปภาพ
+        $file_path = "uploads/products/" . $image['image_path'];
+        if (file_exists($file_path)) {
+            unlink($file_path);
+        }
+        
+        // ลบข้อมูลใน database
+        query("DELETE FROM product_images WHERE id = ?", [$image_id]);
+        
+        $_SESSION['success'] = 'ลบรูปภาพเรียบร้อย';
+    } else {
+        $_SESSION['error'] = 'ไม่พบรูปภาพที่ต้องการลบ';
     }
     
-    // ลบไฟล์รูปภาพ
-    $file_path = "uploads/products/" . $image['image_path'];
-    if (file_exists($file_path)) {
-        unlink($file_path);
-    }
-    
-    // ลบข้อมูลใน database
-    query("DELETE FROM product_images WHERE id = ?", [$image_id]);
-    
-    $_SESSION['success'] = 'ลบรูปภาพเรียบร้อย';
     header('Location: admin_products.php?edit=' . $product_id);
     exit();
 }
@@ -215,12 +221,19 @@ if(isset($_GET['set_primary'])) {
     $product_id = (int)$_GET['product_id'];
     $image_id = (int)$_GET['set_primary'];
     
-    // ยกเลิกรูปหลักเก่า
-    query("UPDATE product_images SET is_primary = 0 WHERE product_id = ?", [$product_id]);
-    // ตั้งรูปหลักใหม่
-    query("UPDATE product_images SET is_primary = 1 WHERE id = ? AND product_id = ?", [$image_id, $product_id]);
+    // ตรวจสอบว่ารูปภาพมีอยู่จริง
+    $image = fetchOne("SELECT * FROM product_images WHERE id = ? AND product_id = ?", [$image_id, $product_id]);
+    if ($image) {
+        // ยกเลิกรูปหลักเก่า
+        query("UPDATE product_images SET is_primary = 0 WHERE product_id = ?", [$product_id]);
+        // ตั้งรูปหลักใหม่
+        query("UPDATE product_images SET is_primary = 1 WHERE id = ?", [$image_id]);
+        
+        $_SESSION['success'] = 'ตั้งรูปหลักเรียบร้อย';
+    } else {
+        $_SESSION['error'] = 'ไม่พบรูปภาพ';
+    }
     
-    $_SESSION['success'] = 'ตั้งรูปหลักเรียบร้อย';
     header('Location: admin_products.php?edit=' . $product_id);
     exit();
 }
@@ -317,14 +330,20 @@ if(isset($_POST['add_product'])) {
                         
                         if($result['success']) {
                             $uploaded_count++;
+                        } else {
+                            $errors[] = "รูปที่ " . ($i+1) . ": " . $result['message'];
                         }
                     }
                 }
             }
             
-            $_SESSION['success'] = "เพิ่มสินค้าเรียบร้อย (อัปโหลด $uploaded_count รูป)";
-            header('Location: admin_products.php');
-            exit();
+            if (empty($errors)) {
+                $_SESSION['success'] = "เพิ่มสินค้าเรียบร้อย (อัปโหลด $uploaded_count รูป)";
+                header('Location: admin_products.php');
+                exit();
+            } else {
+                $error_message = implode('<br>', $errors);
+            }
         } else {
             $error_message = implode('<br>', $errors);
         }
@@ -541,12 +560,6 @@ if(isset($_GET['edit'])) {
             gap: 0.25rem;
             justify-content: center;
         }
-        .stat-card {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 0.5rem;
-            padding: 1.25rem;
-        }
         .btn-action {
             padding: 0.25rem 0.5rem;
             font-size: 0.875rem;
@@ -752,7 +765,7 @@ if(isset($_GET['edit'])) {
                             <label class="form-label">รูปภาพ (เลือกได้หลายรูป)</label>
                             <input type="file" class="form-control" name="images[]" accept="image/*" multiple onchange="previewImages(this, 'addPreview')">
                             <div class="image-gallery" id="addPreview"></div>
-                            <small class="text-muted">รูปแรกจะเป็นรูปหลัก</small>
+                            <small class="text-muted">รูปแรกจะเป็นรูปหลัก และจะบันทึกลงฐานข้อมูล</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">สถานะ</label>
@@ -832,7 +845,7 @@ if(isset($_GET['edit'])) {
                             <textarea class="form-control" name="description" rows="3"><?php echo htmlspecialchars($edit_product['description'] ?? ''); ?></textarea>
                         </div>
                         
-                        <!-- รูปภาพที่มีอยู่แล้ว -->
+                        <!-- รูปภาพที่มีอยู่แล้ว (ดึงจากฐานข้อมูล) -->
                         <?php if(!empty($edit_images)): ?>
                         <div class="mb-3">
                             <label class="form-label">รูปภาพที่มีอยู่</label>
@@ -867,7 +880,7 @@ if(isset($_GET['edit'])) {
                             <label class="form-label">เพิ่มรูปภาพใหม่</label>
                             <input type="file" class="form-control" name="new_images[]" accept="image/*" multiple onchange="previewImages(this, 'editPreview')">
                             <div class="image-gallery" id="editPreview"></div>
-                            <small class="text-muted">ระบบจะบันทึกชื่อไฟล์ตาม ID สินค้า</small>
+                            <small class="text-muted">ระบบจะบันทึกข้อมูลลงฐานข้อมูลโดยอัตโนมัติ</small>
                         </div>
                         
                         <div class="mb-3">
