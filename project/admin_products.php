@@ -25,9 +25,22 @@ $error_message = '';
 // ============================================
 if(isset($_GET['delete_image'])) {
     $image_id = (int)$_GET['delete_image'];
+    $product_id = (int)$_GET['product_id'];
+    
+    // ตรวจสอบว่าเป็นรูปหลักหรือไม่
+    $image = fetchOne("SELECT * FROM product_images WHERE id = ?", [$image_id]);
+    if ($image && $image['is_primary']) {
+        // หารูปอื่นมาเป็นรูปหลักแทน
+        $other = fetchOne("SELECT id FROM product_images WHERE product_id = ? AND id != ? ORDER BY sort_order LIMIT 1", 
+                         [$product_id, $image_id]);
+        if ($other) {
+            query("UPDATE product_images SET is_primary = 1 WHERE id = ?", [$other['id']]);
+        }
+    }
+    
     deleteProductImage($image_id);
     $_SESSION['success'] = 'ลบรูปภาพเรียบร้อย';
-    header('Location: admin_products.php?edit=' . $_GET['product_id']);
+    header('Location: admin_products.php?edit=' . $product_id);
     exit();
 }
 
@@ -37,8 +50,13 @@ if(isset($_GET['delete_image'])) {
 if(isset($_GET['set_primary'])) {
     $product_id = (int)$_GET['product_id'];
     $image_id = (int)$_GET['set_primary'];
-    setPrimaryImage($product_id, $image_id);
-    $_SESSION['success'] = 'ตั้งรูปหลักเรียบร้อย';
+    
+    if (setPrimaryImage($product_id, $image_id)) {
+        $_SESSION['success'] = 'ตั้งรูปหลักเรียบร้อย';
+    } else {
+        $_SESSION['error'] = 'ไม่สามารถตั้งรูปหลักได้';
+    }
+    
     header('Location: admin_products.php?edit=' . $product_id);
     exit();
 }
@@ -91,17 +109,23 @@ if(isset($_POST['add_product'])) {
             // สร้าง slug
             $slug = createSlug($name);
             
+            // ตรวจสอบ slug ซ้ำ
+            $check = fetchOne("SELECT id FROM products WHERE slug = ?", [$slug]);
+            if ($check) {
+                $slug = $slug . '-' . time();
+            }
+            
             // บันทึกสินค้า
             $sql = "INSERT INTO products (name, slug, description, price, original_price, stock, category_id, seller_id, status, created_at) 
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
             query($sql, [$name, $slug, $description, $price, $original_price, $stock, $category_id, $seller_id, $status]);
             
             $product_id = $pdo->lastInsertId();
+            $uploaded_count = 0;
             
             // อัปโหลดรูปภาพ (ถ้ามี)
             if(isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
                 $files = $_FILES['images'];
-                $uploaded = 0;
                 
                 for($i = 0; $i < count($files['name']); $i++) {
                     if($files['error'][$i] == UPLOAD_ERR_OK) {
@@ -117,16 +141,13 @@ if(isset($_POST['add_product'])) {
                         $result = uploadProductImage($file, $product_id, $is_primary);
                         
                         if($result['success']) {
-                            $uploaded++;
+                            $uploaded_count++;
                         }
                     }
                 }
-                
-                $_SESSION['success'] = "เพิ่มสินค้าเรียบร้อย (อัปโหลด $uploaded รูป)";
-            } else {
-                $_SESSION['success'] = 'เพิ่มสินค้าเรียบร้อย';
             }
             
+            $_SESSION['success'] = "เพิ่มสินค้าเรียบร้อย (อัปโหลด $uploaded_count รูป)";
             header('Location: admin_products.php');
             exit();
         } else {
@@ -165,6 +186,19 @@ if(isset($_POST['edit_product'])) {
                     WHERE id = ?";
             query($sql, [$name, $description, $price, $original_price, $stock, $category_id, $seller_id, $status, $product_id]);
             
+            $upload_errors = [];
+            $uploaded_count = 0;
+            
+            // ตรวจสอบว่ามีรูปภาพอยู่แล้วหรือไม่
+            $existing_images = getProductImages($product_id);
+            $has_primary = false;
+            foreach ($existing_images as $img) {
+                if ($img['is_primary']) {
+                    $has_primary = true;
+                    break;
+                }
+            }
+            
             // อัปโหลดรูปภาพใหม่ (ถ้ามี)
             if(isset($_FILES['new_images']) && !empty($_FILES['new_images']['name'][0])) {
                 $files = $_FILES['new_images'];
@@ -179,12 +213,33 @@ if(isset($_POST['edit_product'])) {
                             'size' => $files['size'][$i]
                         ];
                         
-                        uploadProductImage($file, $product_id, false);
+                        // รูปแรกที่อัปโหลดจะเป็นรูปหลักถ้ายังไม่มีรูปหลัก
+                        $is_primary = (!$has_primary && $i == 0);
+                        
+                        $result = uploadProductImage($file, $product_id, $is_primary);
+                        
+                        if($result['success']) {
+                            $uploaded_count++;
+                            if ($is_primary) {
+                                $has_primary = true;
+                            }
+                        } else {
+                            $upload_errors[] = "รูปที่ " . ($i+1) . ": " . $result['message'];
+                        }
                     }
                 }
             }
             
-            $_SESSION['success'] = 'แก้ไขสินค้าเรียบร้อย';
+            $message = "แก้ไขสินค้าเรียบร้อย";
+            if ($uploaded_count > 0) {
+                $message .= " (อัปโหลด $uploaded_count รูป)";
+            }
+            $_SESSION['success'] = $message;
+            
+            if (!empty($upload_errors)) {
+                $_SESSION['warning'] = implode('<br>', $upload_errors);
+            }
+            
             header('Location: admin_products.php');
             exit();
         } else {
@@ -383,6 +438,22 @@ if(isset($_GET['edit'])) {
                     </div>
                 <?php endif; ?>
 
+                <?php if(isset($_SESSION['error'])): ?>
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if(isset($_SESSION['warning'])): ?>
+                    <div class="alert alert-warning alert-dismissible fade show">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <?php echo $_SESSION['warning']; unset($_SESSION['warning']); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
                 <?php if($error_message): ?>
                     <div class="alert alert-danger alert-dismissible fade show">
                         <i class="fas fa-exclamation-circle me-2"></i>
@@ -415,40 +486,46 @@ if(isset($_GET['edit'])) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach($products as $product): ?>
+                                    <?php if(empty($products)): ?>
                                     <tr>
-                                        <td>#<?php echo $product['id']; ?></td>
-                                        <td>
-                                            <?php 
-                                            $image = getProductImage($product['id']);
-                                            if($image): ?>
-                                                <img src="uploads/products/<?php echo $image; ?>" class="product-thumb">
-                                            <?php else: ?>
-                                                <img src="https://via.placeholder.com/60x60?text=No+Image" class="product-thumb">
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?php echo htmlspecialchars($product['name']); ?></td>
-                                        <td>฿<?php echo number_format($product['price']); ?></td>
-                                        <td><?php echo number_format($product['stock']); ?></td>
-                                        <td><?php echo htmlspecialchars($product['category_name'] ?? '-'); ?></td>
-                                        <td><?php echo htmlspecialchars($product['seller_name'] ?? '-'); ?></td>
-                                        <td>
-                                            <span class="badge bg-<?php echo $product['status'] == 'active' ? 'success' : 'secondary'; ?>">
-                                                <?php echo $product['status'] == 'active' ? 'กำลังขาย' : 'หยุดขาย'; ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-primary btn-action me-1" 
-                                                    onclick="editProduct(<?php echo $product['id']; ?>)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger btn-action" 
-                                                    onclick="deleteProduct(<?php echo $product['id']; ?>)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
+                                        <td colspan="9" class="text-center py-4">ไม่มีสินค้า</td>
                                     </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach($products as $product): ?>
+                                        <tr>
+                                            <td>#<?php echo $product['id']; ?></td>
+                                            <td>
+                                                <?php 
+                                                $image = getProductImage($product['id']);
+                                                if($image): ?>
+                                                    <img src="uploads/products/<?php echo $image['image_path']; ?>" class="product-thumb" onerror="this.src='https://via.placeholder.com/60x60?text=Error'">
+                                                <?php else: ?>
+                                                    <img src="https://via.placeholder.com/60x60?text=No+Image" class="product-thumb">
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($product['name']); ?></td>
+                                            <td>฿<?php echo number_format($product['price']); ?></td>
+                                            <td><?php echo number_format($product['stock']); ?></td>
+                                            <td><?php echo htmlspecialchars($product['category_name'] ?? '-'); ?></td>
+                                            <td><?php echo htmlspecialchars($product['seller_name'] ?? '-'); ?></td>
+                                            <td>
+                                                <span class="badge bg-<?php echo $product['status'] == 'active' ? 'success' : 'secondary'; ?>">
+                                                    <?php echo $product['status'] == 'active' ? 'กำลังขาย' : 'หยุดขาย'; ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary btn-action me-1" 
+                                                        onclick="editProduct(<?php echo $product['id']; ?>)">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger btn-action" 
+                                                        onclick="deleteProduct(<?php echo $product['id']; ?>)">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -516,6 +593,7 @@ if(isset($_GET['edit'])) {
                             <label class="form-label">รูปภาพ (เลือกได้หลายรูป)</label>
                             <input type="file" class="form-control" name="images[]" accept="image/*" multiple onchange="previewImages(this, 'addPreview')">
                             <div class="image-gallery" id="addPreview"></div>
+                            <small class="text-muted">รูปแรกจะเป็นรูปหลัก</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">สถานะ</label>
@@ -605,7 +683,7 @@ if(isset($_GET['edit'])) {
                                     <?php if($img['is_primary']): ?>
                                         <span class="badge bg-primary">หลัก</span>
                                     <?php endif; ?>
-                                    <img src="uploads/products/<?php echo $img['image_path']; ?>" alt="">
+                                    <img src="uploads/products/<?php echo $img['image_path']; ?>" alt="" onerror="this.src='https://via.placeholder.com/100x100?text=Error'">
                                     <div class="actions">
                                         <?php if(!$img['is_primary']): ?>
                                             <a href="?set_primary=<?php echo $img['id']; ?>&product_id=<?php echo $edit_product['id']; ?>" 
