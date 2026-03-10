@@ -26,57 +26,38 @@ try {
         return query($sql, $params)->fetch();
     }
     
-    function insert($table, $data) {
-        global $pdo;
-        $columns = implode(', ', array_keys($data));
-        $placeholders = ':' . implode(', :', array_keys($data));
-        
-        $sql = "INSERT INTO $table ($columns) VALUES ($placeholders)";
-        $stmt = $pdo->prepare($sql);
-        
-        foreach($data as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
-        
-        $stmt->execute();
-        return $pdo->lastInsertId();
-    }
-    
-    function update($table, $data, $where, $whereParams = []) {
-        global $pdo;
-        $set = [];
-        foreach(array_keys($data) as $key) {
-            $set[] = "$key = :$key";
-        }
-        
-        $sql = "UPDATE $table SET " . implode(', ', $set) . " WHERE $where";
-        $stmt = $pdo->prepare($sql);
-        
-        foreach($data as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
-        foreach($whereParams as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
-        
-        return $stmt->execute();
-    }
-    
-    function delete($table, $where, $params = []) {
-        $sql = "DELETE FROM $table WHERE $where";
-        return query($sql, $params)->rowCount();
-    }
-    
     // ========== ฟังก์ชันจัดการรูปภาพ ==========
     
     /**
-     * อัปโหลดรูปภาพ
+     * สร้างโฟลเดอร์ถ้ายังไม่มี
      */
-    function uploadImage($file, $folder = 'products', $max_size = 5) {
-        // สร้างโฟลเดอร์ถ้ายังไม่มี
+    function ensureDirectoryExists($folder) {
         $upload_dir = "uploads/$folder/";
         if (!file_exists($upload_dir)) {
             mkdir($upload_dir, 0777, true);
+        }
+        // ตรวจสอบสิทธิ์การเขียน
+        return is_writable($upload_dir);
+    }
+    
+    /**
+     * อัปโหลดรูปภาพ (ใช้ ID เป็นชื่อไฟล์)
+     */
+    function uploadProductImage($file, $product_id) {
+        $upload_dir = "uploads/products/";
+        
+        // สร้างโฟลเดอร์ถ้ายังไม่มี
+        if (!file_exists($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
+        
+        // ตรวจสอบสิทธิ์การเขียน
+        if (!is_writable($upload_dir)) {
+            // ลองเปลี่ยนสิทธิ์
+            chmod($upload_dir, 0777);
+            if (!is_writable($upload_dir)) {
+                return ['success' => false, 'message' => 'โฟลเดอร์ uploads/products/ ไม่สามารถเขียนได้ กรุณาตั้งสิทธิ์โฟลเดอร์'];
+            }
         }
         
         // ตรวจสอบข้อผิดพลาด
@@ -94,9 +75,9 @@ try {
             return ['success' => false, 'message' => $error_msg];
         }
         
-        // ตรวจสอบขนาดไฟล์
-        if ($file['size'] > $max_size * 1024 * 1024) {
-            return ['success' => false, 'message' => "ไฟล์ต้องมีขนาดไม่เกิน $max_size MB"];
+        // ตรวจสอบขนาดไฟล์ (ไม่เกิน 5MB)
+        if ($file['size'] > 5 * 1024 * 1024) {
+            return ['success' => false, 'message' => 'ไฟล์ต้องมีขนาดไม่เกิน 5 MB'];
         }
         
         // ตรวจสอบประเภทไฟล์
@@ -116,56 +97,110 @@ try {
             return ['success' => false, 'message' => 'นามสกุลไฟล์ไม่ถูกต้อง'];
         }
         
-        // สร้างชื่อไฟล์ใหม่เพื่อป้องกันชื่อซ้ำ
-        $new_filename = uniqid() . '_' . time() . '.' . $extension;
-        $target_path = $upload_dir . $new_filename;
+        // ใช้ .jpg เป็นหลัก
+        $target_path = $upload_dir . $product_id . '.jpg';
+        
+        // ลบรูปเก่าถ้ามี
+        if (file_exists($target_path)) {
+            unlink($target_path);
+        }
         
         // ย้ายไฟล์
         if (move_uploaded_file($file['tmp_name'], $target_path)) {
-            // ตั้งสิทธิ์ให้ไฟล์
             chmod($target_path, 0644);
             
+            // สร้างรูปขนาดเล็ก (thumbnail) ถ้าต้องการ
+            createThumbnail($target_path, $upload_dir . $product_id . '_thumb.jpg', 200);
+            
             return [
-                'success' => true,
-                'filename' => $new_filename,
-                'path' => $target_path,
-                'message' => 'อัปโหลดไฟล์สำเร็จ'
+                'success' => true, 
+                'message' => 'อัปโหลดไฟล์สำเร็จ',
+                'filename' => $product_id . '.jpg',
+                'path' => $target_path
             ];
         } else {
-            return ['success' => false, 'message' => 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้'];
+            // ตรวจสอบ error ล่าสุด
+            $error = error_get_last();
+            return [
+                'success' => false, 
+                'message' => 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้: ' . ($error['message'] ?? 'ไม่ทราบสาเหตุ')
+            ];
         }
+    }
+    
+    /**
+     * สร้างรูปขนาดเล็ก
+     */
+    function createThumbnail($source, $destination, $size = 200) {
+        if (!file_exists($source)) return false;
+        
+        list($width, $height) = getimagesize($source);
+        $ratio = $width / $height;
+        
+        if ($width > $height) {
+            $new_width = $size;
+            $new_height = $size / $ratio;
+        } else {
+            $new_height = $size;
+            $new_width = $size * $ratio;
+        }
+        
+        $thumb = imagecreatetruecolor($new_width, $new_height);
+        
+        $extension = strtolower(pathinfo($source, PATHINFO_EXTENSION));
+        
+        switch($extension) {
+            case 'jpg':
+            case 'jpeg':
+                $source_img = imagecreatefromjpeg($source);
+                imagecopyresampled($thumb, $source_img, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+                imagejpeg($thumb, $destination, 90);
+                break;
+            case 'png':
+                $source_img = imagecreatefrompng($source);
+                imagecopyresampled($thumb, $source_img, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+                imagepng($thumb, $destination, 9);
+                break;
+            case 'gif':
+                $source_img = imagecreatefromgif($source);
+                imagecopyresampled($thumb, $source_img, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+                imagegif($thumb, $destination);
+                break;
+        }
+        
+        imagedestroy($source_img);
+        imagedestroy($thumb);
+        return true;
     }
     
     /**
      * ลบรูปภาพ
      */
-    function deleteImage($filename, $folder = 'products') {
-        if (empty($filename)) {
-            return true;
-        }
+    function deleteProductImage($product_id) {
+        $target_path = "uploads/products/" . $product_id . ".jpg";
+        $thumb_path = "uploads/products/" . $product_id . "_thumb.jpg";
         
-        $file_path = "uploads/$folder/$filename";
-        if (file_exists($file_path)) {
-            return unlink($file_path);
+        if (file_exists($target_path)) {
+            unlink($target_path);
+        }
+        if (file_exists($thumb_path)) {
+            unlink($thumb_path);
         }
         return true;
     }
     
     /**
-     * แสดงรูปภาพ (พร้อม fallback)
+     * แสดงรูปภาพ
      */
-    function showImage($filename, $folder = 'products', $default = 'default.jpg') {
-        // ถ้ามีชื่อไฟล์และไฟล์มีอยู่จริง
-        if (!empty($filename) && file_exists("uploads/$folder/$filename")) {
-            return "uploads/$folder/$filename";
+    function showProductImage($product_id, $type = 'original') {
+        $filename = $type == 'thumb' ? $product_id . '_thumb.jpg' : $product_id . '.jpg';
+        $path = "uploads/products/" . $filename;
+        
+        if (file_exists($path)) {
+            return $path;
         }
         
-        // ตรวจสอบว่ามีไฟล์เริ่มต้นหรือไม่
-        if (file_exists("uploads/$folder/$default")) {
-            return "uploads/$folder/$default";
-        }
-        
-        // ใช้ placeholder
+        // ถ้าไม่มีรูป ส่งกลับ placeholder
         return "https://via.placeholder.com/300x300?text=No+Image";
     }
     
