@@ -35,40 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image = '';
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $target_dir = "../assets/images/";
-            
-            // Create folder if not exists
             if (!file_exists($target_dir)) {
                 mkdir($target_dir, 0777, true);
             }
             
-            // Validate file type
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime_type = finfo_file($finfo, $_FILES['image']['tmp_name']);
-            finfo_close($finfo);
-            
-            if (!in_array($mime_type, $allowed_types)) {
-                $_SESSION['error'] = "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Validate file size (max 2MB)
-            if ($_FILES['image']['size'] > 2 * 1024 * 1024) {
-                $_SESSION['error'] = "ไฟล์รูปต้องมีขนาดไม่เกิน 2MB";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Generate unique filename
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $image = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
+            $image = time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $image;
             
-            if (!move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                $_SESSION['error'] = "ไม่สามารถอัปโหลดรูปภาพได้";
-                header("Location: products.php");
-                exit();
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                // Success
             }
         }
         
@@ -97,46 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image = $current_image;
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $target_dir = "../assets/images/";
-            
-            // Validate file type
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime_type = finfo_file($finfo, $_FILES['image']['tmp_name']);
-            finfo_close($finfo);
-            
-            if (!in_array($mime_type, $allowed_types)) {
-                $_SESSION['error'] = "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Validate file size
-            if ($_FILES['image']['size'] > 2 * 1024 * 1024) {
-                $_SESSION['error'] = "ไฟล์รูปต้องมีขนาดไม่เกิน 2MB";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Generate unique filename
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $new_image = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
+            $new_image = time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $new_image;
             
             if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                // Delete old image from both folders
-                if ($current_image) {
-                    if (file_exists($target_dir . $current_image)) {
-                        unlink($target_dir . $current_image);
-                    }
-                    if (file_exists("../assets/images/stores/" . $current_image)) {
-                        unlink("../assets/images/stores/" . $current_image);
-                    }
+                if ($current_image && file_exists($target_dir . $current_image)) {
+                    unlink($target_dir . $current_image);
                 }
                 $image = $new_image;
-            } else {
-                $_SESSION['error'] = "ไม่สามารถอัปโหลดรูปภาพได้";
-                header("Location: products.php");
-                exit();
             }
         }
         
@@ -162,17 +107,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['delete_product'])) {
         $id = (int)$_POST['product_id'];
         
-        // Delete image file from both folders
+        // Delete image file
         $img_query = $conn->query("SELECT image FROM products WHERE id = $id");
         if ($img_query && $img_query->num_rows > 0) {
             $img = $img_query->fetch_assoc();
-            // Delete from images folder
             if ($img['image'] && file_exists("../assets/images/" . $img['image'])) {
                 unlink("../assets/images/" . $img['image']);
-            }
-            // Delete from stores folder (just in case)
-            if ($img['image'] && file_exists("../assets/images/stores/" . $img['image'])) {
-                unlink("../assets/images/stores/" . $img['image']);
             }
         }
         
@@ -413,11 +353,10 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                                 <?php while ($product = $products->fetch_assoc()): ?>
                                     <tr data-category="<?php echo $product['category_id']; ?>" data-store="<?php echo $product['store_id']; ?>">
                                         <td>
-                                            <?php if (!empty($product['image'])): ?>
+                                            <?php if ($product['image'] && file_exists("../assets/images/" . $product['image'])): ?>
                                                 <img src="../assets/images/<?php echo $product['image']; ?>" 
-                                                     alt="<?php echo htmlspecialchars($product['product_name']); ?>" 
-                                                     class="product-image-thumb"
-                                                     onerror="this.onerror=null; this.src='../assets/images/stores/<?php echo $product['image']; ?>'; this.onerror=function(){this.style.display='none'; this.parentNode.innerHTML='<div class=\'no-image-thumb\'><i class=\'fas fa-image\'></i></div>';}">
+                                                     alt="<?php echo $product['product_name']; ?>" 
+                                                     class="product-image-thumb">
                                             <?php else: ?>
                                                 <div class="no-image-thumb">
                                                     <i class="fas fa-image"></i>
@@ -601,9 +540,7 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                         
                         <div class="form-group" style="grid-column: 1/-1;">
                             <label>รูปภาพปัจจุบัน</label>
-                            <div>
-                                <img id="currentImageDisplay" class="image-preview" style="max-width: 150px; max-height: 150px; display: none;">
-                            </div>
+                            <img id="currentImageDisplay" class="image-preview" style="max-width: 150px;">
                         </div>
                         
                         <div class="form-group" style="grid-column: 1/-1;">
@@ -639,13 +576,6 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         document.getElementById('addModal').classList.add('active');
     }
     
-    function checkImageExists(url, callback) {
-        const img = new Image();
-        img.onload = function() { callback(true); };
-        img.onerror = function() { callback(false); };
-        img.src = url;
-    }
-    
     function editProduct(product) {
         document.getElementById('edit_id').value = product.id;
         document.getElementById('edit_name').value = product.product_name;
@@ -656,31 +586,11 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         document.getElementById('edit_store').value = product.store_id;
         document.getElementById('edit_current_image').value = product.image;
         
-        // Show current image
-        const currentImageDisplay = document.getElementById('currentImageDisplay');
         if (product.image) {
-            // Try images folder first
-            const imagesPath = '../assets/images/' + product.image;
-            const storesPath = '../assets/images/stores/' + product.image;
-            
-            checkImageExists(imagesPath, function(exists) {
-                if (exists) {
-                    currentImageDisplay.src = imagesPath;
-                    currentImageDisplay.style.display = 'block';
-                } else {
-                    // Try stores folder
-                    checkImageExists(storesPath, function(exists2) {
-                        if (exists2) {
-                            currentImageDisplay.src = storesPath;
-                            currentImageDisplay.style.display = 'block';
-                        } else {
-                            currentImageDisplay.style.display = 'none';
-                        }
-                    });
-                }
-            });
+            document.getElementById('currentImageDisplay').src = '../assets/images/' + product.image;
+            document.getElementById('currentImageDisplay').style.display = 'block';
         } else {
-            currentImageDisplay.style.display = 'none';
+            document.getElementById('currentImageDisplay').style.display = 'none';
         }
         
         document.getElementById('editImagePreview').style.display = 'none';
