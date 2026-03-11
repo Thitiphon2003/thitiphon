@@ -35,16 +35,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image = '';
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $target_dir = "../assets/images/";
+            
+            // Create folder if not exists
             if (!file_exists($target_dir)) {
                 mkdir($target_dir, 0777, true);
             }
             
+            // Validate file type
+            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+            $file_type = $_FILES['image']['type'];
+            
+            if (!in_array($file_type, $allowed_types)) {
+                $_SESSION['error'] = "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น (ประเภทไฟล์: $file_type)";
+                header("Location: products.php");
+                exit();
+            }
+            
+            // Validate file size (max 2MB)
+            if ($_FILES['image']['size'] > 2 * 1024 * 1024) {
+                $_SESSION['error'] = "ไฟล์รูปต้องมีขนาดไม่เกิน 2MB (ขนาด: " . round($_FILES['image']['size'] / 1024 / 1024, 2) . " MB)";
+                header("Location: products.php");
+                exit();
+            }
+            
+            // Generate unique filename
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $image = time() . '_' . uniqid() . '.' . $file_extension;
+            $image = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $image;
             
+            // Upload file
             if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                // Success
+                // Set permissions
+                chmod($target_file, 0644);
+                $_SESSION['debug'] = "อัปโหลดรูปสำเร็จ: $image";
+            } else {
+                $_SESSION['error'] = "ไม่สามารถอัปโหลดรูปภาพได้ (Error: " . $_FILES['image']['error'] . ")";
+                header("Location: products.php");
+                exit();
             }
         }
         
@@ -52,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   VALUES ('$name', '$description', $price, $stock, '$image', $category_id, $store_id)";
         
         if ($conn->query($query)) {
-            $_SESSION['success'] = "เพิ่มสินค้าสำเร็จ";
+            $_SESSION['success'] = "เพิ่มสินค้าสำเร็จ" . ($image ? " (รูป: $image)" : "");
         } else {
             $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
         }
@@ -73,15 +100,45 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image = $current_image;
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $target_dir = "../assets/images/";
+            
+            // Validate file type
+            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+            $file_type = $_FILES['image']['type'];
+            
+            if (!in_array($file_type, $allowed_types)) {
+                $_SESSION['error'] = "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น";
+                header("Location: products.php");
+                exit();
+            }
+            
+            // Validate file size
+            if ($_FILES['image']['size'] > 2 * 1024 * 1024) {
+                $_SESSION['error'] = "ไฟล์รูปต้องมีขนาดไม่เกิน 2MB";
+                header("Location: products.php");
+                exit();
+            }
+            
+            // Generate unique filename
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $new_image = time() . '_' . uniqid() . '.' . $file_extension;
+            $new_image = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $new_image;
             
             if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                if ($current_image && file_exists($target_dir . $current_image)) {
-                    unlink($target_dir . $current_image);
+                // Delete old image from both folders
+                if ($current_image) {
+                    if (file_exists($target_dir . $current_image)) {
+                        unlink($target_dir . $current_image);
+                    }
+                    if (file_exists("../assets/images/stores/" . $current_image)) {
+                        unlink("../assets/images/stores/" . $current_image);
+                    }
                 }
                 $image = $new_image;
+                chmod($target_file, 0644);
+            } else {
+                $_SESSION['error'] = "ไม่สามารถอัปโหลดรูปภาพได้";
+                header("Location: products.php");
+                exit();
             }
         }
         
@@ -96,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   WHERE id = $id";
         
         if ($conn->query($query)) {
-            $_SESSION['success'] = "แก้ไขสินค้าสำเร็จ";
+            $_SESSION['success'] = "แก้ไขสินค้าสำเร็จ" . ($image != $current_image ? " (อัปโหลดรูปใหม่: $image)" : "");
         } else {
             $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
         }
@@ -107,12 +164,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['delete_product'])) {
         $id = (int)$_POST['product_id'];
         
-        // Delete image file
+        // Delete image file from both folders
         $img_query = $conn->query("SELECT image FROM products WHERE id = $id");
         if ($img_query && $img_query->num_rows > 0) {
             $img = $img_query->fetch_assoc();
+            // Delete from images folder
             if ($img['image'] && file_exists("../assets/images/" . $img['image'])) {
                 unlink("../assets/images/" . $img['image']);
+            }
+            // Delete from stores folder (just in case)
+            if ($img['image'] && file_exists("../assets/images/stores/" . $img['image'])) {
+                unlink("../assets/images/stores/" . $img['image']);
             }
         }
         
@@ -206,6 +268,14 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
             flex: 1;
             min-width: 150px;
         }
+        .debug-info {
+            background: #e2f3ff;
+            border-left: 4px solid #17a2b8;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 5px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -293,6 +363,12 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                 </div>
             <?php endif; ?>
             
+            <?php if (isset($_SESSION['debug'])): ?>
+                <div class="debug-info">
+                    <i class="fas fa-bug"></i> Debug: <?php echo $_SESSION['debug']; unset($_SESSION['debug']); ?>
+                </div>
+            <?php endif; ?>
+            
             <!-- Action Bar -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <div class="filter-section">
@@ -353,20 +429,35 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                                 <?php while ($product = $products->fetch_assoc()): ?>
                                     <tr data-category="<?php echo $product['category_id']; ?>" data-store="<?php echo $product['store_id']; ?>">
                                         <td>
-                                            <?php if ($product['image'] && file_exists("../assets/images/" . $product['image'])): ?>
-                                                <img src="../assets/images/<?php echo $product['image']; ?>" 
-                                                     alt="<?php echo $product['product_name']; ?>" 
-                                                     class="product-image-thumb">
-                                            <?php else: ?>
-                                                <div class="no-image-thumb">
-                                                    <i class="fas fa-image"></i>
-                                                </div>
-                                            <?php endif; ?>
+                                            <?php 
+                                            $image_url = "";
+                                            $image_display = '<div class="no-image-thumb"><i class="fas fa-image"></i></div>';
+                                            
+                                            if (!empty($product['image'])) {
+                                                // Check in images folder
+                                                if (file_exists("../assets/images/" . $product['image'])) {
+                                                    $image_url = "../assets/images/" . $product['image'];
+                                                } 
+                                                // Check in stores folder
+                                                elseif (file_exists("../assets/images/stores/" . $product['image'])) {
+                                                    $image_url = "../assets/images/stores/" . $product['image'];
+                                                }
+                                                
+                                                if ($image_url) {
+                                                    $image_display = '<img src="' . $image_url . '" alt="' . htmlspecialchars($product['product_name']) . '" class="product-image-thumb">';
+                                                }
+                                            }
+                                            
+                                            echo $image_display;
+                                            ?>
                                         </td>
                                         <td>
                                             <strong><?php echo htmlspecialchars($product['product_name']); ?></strong>
                                             <br>
                                             <small style="color: var(--secondary);"><?php echo substr($product['product_description'], 0, 50); ?>...</small>
+                                            <?php if ($product['image']): ?>
+                                                <br><small style="color: #17a2b8;">ไฟล์: <?php echo $product['image']; ?></small>
+                                            <?php endif; ?>
                                         </td>
                                         <td><strong style="color: var(--primary);">฿<?php echo number_format($product['price'], 2); ?></strong></td>
                                         <td>
@@ -464,7 +555,7 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                             <label>รูปภาพสินค้า</label>
                             <div class="image-upload" onclick="document.getElementById('addImage').click()">
                                 <i class="fas fa-cloud-upload-alt"></i>
-                                <p>คลิกเพื่อเลือกรูปภาพ</p>
+                                <p>คลิกเพื่อเลือกรูปภาพ (ขนาดไม่เกิน 2MB, JPG/PNG/GIF/WEBP)</p>
                                 <input type="file" id="addImage" name="image" accept="image/*" style="display: none;" onchange="previewAddImage(this)">
                             </div>
                             <img id="addImagePreview" class="image-preview" style="display: none;">
@@ -540,14 +631,17 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                         
                         <div class="form-group" style="grid-column: 1/-1;">
                             <label>รูปภาพปัจจุบัน</label>
-                            <img id="currentImageDisplay" class="image-preview" style="max-width: 150px;">
+                            <div>
+                                <img id="currentImageDisplay" class="image-preview" style="max-width: 150px; max-height: 150px; display: none;">
+                                <p id="currentImageName" style="color: var(--secondary); font-size: 0.9rem;"></p>
+                            </div>
                         </div>
                         
                         <div class="form-group" style="grid-column: 1/-1;">
                             <label>เปลี่ยนรูปภาพใหม่</label>
                             <div class="image-upload" onclick="document.getElementById('editImage').click()">
                                 <i class="fas fa-cloud-upload-alt"></i>
-                                <p>คลิกเพื่อเลือกรูปภาพใหม่</p>
+                                <p>คลิกเพื่อเลือกรูปภาพใหม่ (ขนาดไม่เกิน 2MB, JPG/PNG/GIF/WEBP)</p>
                                 <input type="file" id="editImage" name="image" accept="image/*" style="display: none;" onchange="previewEditImage(this)">
                             </div>
                             <img id="editImagePreview" class="image-preview" style="display: none;">
@@ -576,6 +670,13 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         document.getElementById('addModal').classList.add('active');
     }
     
+    function checkImageExists(url, callback) {
+        const img = new Image();
+        img.onload = function() { callback(true); };
+        img.onerror = function() { callback(false); };
+        img.src = url;
+    }
+    
     function editProduct(product) {
         document.getElementById('edit_id').value = product.id;
         document.getElementById('edit_name').value = product.product_name;
@@ -586,11 +687,37 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         document.getElementById('edit_store').value = product.store_id;
         document.getElementById('edit_current_image').value = product.image;
         
+        // Show current image
+        const currentImageDisplay = document.getElementById('currentImageDisplay');
+        const currentImageName = document.getElementById('currentImageName');
+        
         if (product.image) {
-            document.getElementById('currentImageDisplay').src = '../assets/images/' + product.image;
-            document.getElementById('currentImageDisplay').style.display = 'block';
+            currentImageName.textContent = 'ไฟล์: ' + product.image;
+            
+            // Try images folder first
+            const imagesPath = '../assets/images/' + product.image;
+            const storesPath = '../assets/images/stores/' + product.image;
+            
+            checkImageExists(imagesPath, function(exists) {
+                if (exists) {
+                    currentImageDisplay.src = imagesPath;
+                    currentImageDisplay.style.display = 'block';
+                } else {
+                    // Try stores folder
+                    checkImageExists(storesPath, function(exists2) {
+                        if (exists2) {
+                            currentImageDisplay.src = storesPath;
+                            currentImageDisplay.style.display = 'block';
+                        } else {
+                            currentImageDisplay.style.display = 'none';
+                            currentImageName.textContent += ' (ไม่พบไฟล์รูป)';
+                        }
+                    });
+                }
+            });
         } else {
-            document.getElementById('currentImageDisplay').style.display = 'none';
+            currentImageDisplay.style.display = 'none';
+            currentImageName.textContent = 'ไม่มีรูปภาพ';
         }
         
         document.getElementById('editImagePreview').style.display = 'none';
@@ -612,6 +739,13 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
     function previewAddImage(input) {
         const preview = document.getElementById('addImagePreview');
         if (input.files && input.files[0]) {
+            // Check file size
+            if (input.files[0].size > 2 * 1024 * 1024) {
+                alert('ไฟล์รูปต้องมีขนาดไม่เกิน 2MB (ขนาด: ' + (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB)');
+                input.value = '';
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
                 preview.src = e.target.result;
@@ -624,6 +758,13 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
     function previewEditImage(input) {
         const preview = document.getElementById('editImagePreview');
         if (input.files && input.files[0]) {
+            // Check file size
+            if (input.files[0].size > 2 * 1024 * 1024) {
+                alert('ไฟล์รูปต้องมีขนาดไม่เกิน 2MB (ขนาด: ' + (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB)');
+                input.value = '';
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
                 preview.src = e.target.result;
