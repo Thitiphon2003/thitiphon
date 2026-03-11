@@ -20,7 +20,7 @@ $featured_query = "SELECT p.*, c.category_name, s.store_name
                   LEFT JOIN categories c ON p.category_id = c.id 
                   LEFT JOIN stores s ON p.store_id = s.id 
                   ORDER BY p.created_at DESC 
-                  LIMIT 6";
+                  LIMIT 4";
 $featured_products = $conn->query($featured_query);
 
 // Fetch recommended products (สินค้าแนะนำ 24 ชิ้น)
@@ -29,7 +29,7 @@ $recommended_query = "SELECT p.*, c.category_name, s.store_name
                      LEFT JOIN categories c ON p.category_id = c.id 
                      LEFT JOIN stores s ON p.store_id = s.id 
                      ORDER BY RAND() 
-                     LIMIT 5";
+                     LIMIT 8";
 $recommended_products = $conn->query($recommended_query);
 ?>
 
