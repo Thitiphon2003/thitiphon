@@ -89,12 +89,6 @@ include 'includes/new-header.php';
             <p style="color: var(--medium-gray);">ไม่มีบัญชีใช่ไหม? <a href="register.php" style="color: var(--primary-blue); font-weight: 600; text-decoration: none;">สร้างบัญชี</a></p>
         </div>
         
-        <!-- Demo Accounts -->
-        <div style="margin-top: 2rem; background: var(--light-gray); padding: 1rem; border-radius: 10px;">
-            <p style="font-weight: 600; margin-bottom: 0.5rem;">Demo Accounts:</p>
-            <p>Admin: admin / 12345</p>
-            <p>User: user1 / 123456</p>
-        </div>
     </div>
 </div>
 
