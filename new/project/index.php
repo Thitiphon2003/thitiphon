@@ -29,7 +29,7 @@ $recommended_query = "SELECT p.*, c.category_name, s.store_name
                      LEFT JOIN categories c ON p.category_id = c.id 
                      LEFT JOIN stores s ON p.store_id = s.id 
                      ORDER BY RAND() 
-                     LIMIT 24";
+                     LIMIT 5";
 $recommended_products = $conn->query($recommended_query);
 ?>
 
