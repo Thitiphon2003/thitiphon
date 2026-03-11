@@ -514,11 +514,11 @@ $grid_products = $conn->query($grid_query);
                         
                         <div class="actions">
                             <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">
-                                <i class="fas fa-eye"></i> ดูรายละเอียด
+                                <i class="fas fa-eye"></i>
                             </a>
                             <?php if (isLoggedIn()): ?>
                                 <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
-                                    <i class="fas fa-shopping-cart">เพิ่มสินค้า</i>
+                                    <i class="fas fa-shopping-cart"></i>
                                 </a>
                             <?php endif; ?>
                         </div>
