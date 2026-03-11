@@ -21,6 +21,17 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     die("Access denied");
 }
 
+// ตรวจสอบและสร้างโฟลเดอร์ images
+$target_dir = "../assets/images/";
+if (!file_exists($target_dir)) {
+    mkdir($target_dir, 0777, true);
+}
+
+// ตรวจสอบสิทธิ์การเขียน
+if (!is_writable($target_dir)) {
+    chmod($target_dir, 0777);
+}
+
 // Handle product actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_product'])) {
@@ -34,42 +45,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Handle image upload
         $image = '';
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-            $target_dir = "../assets/images/";
-            
-            // Create folder if not exists
-            if (!file_exists($target_dir)) {
-                mkdir($target_dir, 0777, true);
-            }
-            
-            // Validate file type
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
-            $file_type = $_FILES['image']['type'];
-            
-            if (!in_array($file_type, $allowed_types)) {
-                $_SESSION['error'] = "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น (ประเภทไฟล์: $file_type)";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Validate file size (max 2MB)
-            if ($_FILES['image']['size'] > 2 * 1024 * 1024) {
-                $_SESSION['error'] = "ไฟล์รูปต้องมีขนาดไม่เกิน 2MB (ขนาด: " . round($_FILES['image']['size'] / 1024 / 1024, 2) . " MB)";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Generate unique filename
-            $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $image = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
-            $target_file = $target_dir . $image;
-            
-            // Upload file
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                // Set permissions
-                chmod($target_file, 0644);
-                $_SESSION['debug'] = "อัปโหลดรูปสำเร็จ: $image";
+            $upload_result = uploadImage($_FILES['image'], $target_dir);
+            if ($upload_result['success']) {
+                $image = $upload_result['filename'];
+                $_SESSION['success'] = "อัปโหลดรูปสำเร็จ: " . $image;
             } else {
-                $_SESSION['error'] = "ไม่สามารถอัปโหลดรูปภาพได้ (Error: " . $_FILES['image']['error'] . ")";
+                $_SESSION['error'] = "อัปโหลดรูปไม่สำเร็จ: " . $upload_result['message'];
                 header("Location: products.php");
                 exit();
             }
@@ -99,44 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         $image = $current_image;
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-            $target_dir = "../assets/images/";
-            
-            // Validate file type
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
-            $file_type = $_FILES['image']['type'];
-            
-            if (!in_array($file_type, $allowed_types)) {
-                $_SESSION['error'] = "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Validate file size
-            if ($_FILES['image']['size'] > 2 * 1024 * 1024) {
-                $_SESSION['error'] = "ไฟล์รูปต้องมีขนาดไม่เกิน 2MB";
-                header("Location: products.php");
-                exit();
-            }
-            
-            // Generate unique filename
-            $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $new_image = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
-            $target_file = $target_dir . $new_image;
-            
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                // Delete old image from both folders
+            $upload_result = uploadImage($_FILES['image'], $target_dir);
+            if ($upload_result['success']) {
+                // Delete old image
                 if ($current_image) {
-                    if (file_exists($target_dir . $current_image)) {
-                        unlink($target_dir . $current_image);
-                    }
-                    if (file_exists("../assets/images/stores/" . $current_image)) {
-                        unlink("../assets/images/stores/" . $current_image);
-                    }
+                    deleteImage($current_image);
                 }
-                $image = $new_image;
-                chmod($target_file, 0644);
+                $image = $upload_result['filename'];
+                $_SESSION['success'] = "อัปโหลดรูปใหม่สำเร็จ: " . $image;
             } else {
-                $_SESSION['error'] = "ไม่สามารถอัปโหลดรูปภาพได้";
+                $_SESSION['error'] = "อัปโหลดรูปไม่สำเร็จ: " . $upload_result['message'];
                 header("Location: products.php");
                 exit();
             }
@@ -153,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   WHERE id = $id";
         
         if ($conn->query($query)) {
-            $_SESSION['success'] = "แก้ไขสินค้าสำเร็จ" . ($image != $current_image ? " (อัปโหลดรูปใหม่: $image)" : "");
+            $_SESSION['success'] = "แก้ไขสินค้าสำเร็จ";
         } else {
             $_SESSION['error'] = "เกิดข้อผิดพลาด: " . $conn->error;
         }
@@ -164,18 +117,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['delete_product'])) {
         $id = (int)$_POST['product_id'];
         
-        // Delete image file from both folders
+        // Delete image file
         $img_query = $conn->query("SELECT image FROM products WHERE id = $id");
         if ($img_query && $img_query->num_rows > 0) {
             $img = $img_query->fetch_assoc();
-            // Delete from images folder
-            if ($img['image'] && file_exists("../assets/images/" . $img['image'])) {
-                unlink("../assets/images/" . $img['image']);
-            }
-            // Delete from stores folder (just in case)
-            if ($img['image'] && file_exists("../assets/images/stores/" . $img['image'])) {
-                unlink("../assets/images/stores/" . $img['image']);
-            }
+            deleteImage($img['image']);
         }
         
         if ($conn->query("DELETE FROM products WHERE id = $id")) {
@@ -186,6 +132,91 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header("Location: products.php");
         exit();
     }
+}
+
+// Function to upload image
+function uploadImage($file, $target_dir) {
+    $result = ['success' => false, 'message' => '', 'filename' => ''];
+    
+    // Check if file was uploaded without errors
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        $upload_errors = [
+            UPLOAD_ERR_INI_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป (เกินค่า upload_max_filesize ใน php.ini)',
+            UPLOAD_ERR_FORM_SIZE => 'ไฟล์มีขนาดใหญ่เกินไป',
+            UPLOAD_ERR_PARTIAL => 'อัปโหลดไฟล์ได้เพียงบางส่วน',
+            UPLOAD_ERR_NO_FILE => 'ไม่ได้เลือกไฟล์',
+            UPLOAD_ERR_NO_TMP_DIR => 'ไม่มีโฟลเดอร์ชั่วคราว',
+            UPLOAD_ERR_CANT_WRITE => 'ไม่สามารถเขียนไฟล์ลงดิสก์ได้',
+            UPLOAD_ERR_EXTENSION => 'ส่วนขยาย PHP หยุดการอัปโหลด'
+        ];
+        $result['message'] = $upload_errors[$file['error']] ?? 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ (รหัส: ' . $file['error'] . ')';
+        return $result;
+    }
+    
+    // Validate file size (max 5MB)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        $result['message'] = 'ไฟล์รูปต้องมีขนาดไม่เกิน 5MB (ขนาดไฟล์: ' . round($file['size'] / 1024 / 1024, 2) . ' MB)';
+        return $result;
+    }
+    
+    // Validate file type
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    $allowed_types = [
+        'image/jpeg' => 'jpg',
+        'image/jpg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp'
+    ];
+    
+    if (!isset($allowed_types[$mime_type])) {
+        $result['message'] = 'รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น (ชนิดไฟล์: ' . $mime_type . ')';
+        return $result;
+    }
+    
+    // Get file extension
+    $extension = $allowed_types[$mime_type];
+    
+    // Generate unique filename
+    $filename = 'product_' . time() . '_' . uniqid() . '.' . $extension;
+    $target_file = $target_dir . $filename;
+    
+    // Upload file
+    if (move_uploaded_file($file['tmp_name'], $target_file)) {
+        // Set permissions
+        chmod($target_file, 0644);
+        $result['success'] = true;
+        $result['filename'] = $filename;
+        $result['message'] = 'อัปโหลดสำเร็จ';
+    } else {
+        $result['message'] = 'ไม่สามารถย้ายไฟล์ไปยังโฟลเดอร์ปลายทางได้ (สิทธิ์การเขียน: ' . (is_writable($target_dir) ? 'มี' : 'ไม่มี') . ')';
+    }
+    
+    return $result;
+}
+
+// Function to delete image
+function deleteImage($filename) {
+    if (empty($filename)) return true;
+    
+    $deleted = false;
+    $paths = [
+        "../assets/images/" . $filename,
+        "../assets/images/stores/" . $filename
+    ];
+    
+    foreach ($paths as $path) {
+        if (file_exists($path)) {
+            if (unlink($path)) {
+                $deleted = true;
+            }
+        }
+    }
+    
+    return $deleted;
 }
 
 // Get all products
@@ -203,6 +234,10 @@ $stores = $conn->query("SELECT * FROM stores ORDER BY store_name");
 
 // Get admin info
 $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->fetch_assoc();
+
+// Check upload directory permissions
+$upload_dir_status = is_writable($target_dir) ? 'สามารถเขียนได้' : 'ไม่สามารถเขียนได้';
+$upload_dir_perms = substr(sprintf('%o', fileperms($target_dir)), -4);
 ?>
 
 <!DOCTYPE html>
@@ -268,13 +303,17 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
             flex: 1;
             min-width: 150px;
         }
-        .debug-info {
+        .system-info {
             background: #e2f3ff;
             border-left: 4px solid #17a2b8;
             padding: 1rem;
             margin-bottom: 1rem;
             border-radius: 5px;
-            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .system-info i {
+            margin-right: 0.5rem;
+            color: #17a2b8;
         }
     </style>
 </head>
@@ -348,6 +387,15 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                 </div>
             </div>
             
+            <!-- System Info (แสดงเฉพาะ admin) -->
+            <div class="system-info">
+                <i class="fas fa-info-circle"></i> 
+                <strong>ข้อมูลระบบอัปโหลด:</strong> 
+                โฟลเดอร์ images: <?php echo $upload_dir_status; ?> (สิทธิ์ <?php echo $upload_dir_perms; ?>) | 
+                ขนาดไฟล์สูงสุด: 5MB | 
+                ไฟล์ที่รองรับ: JPG, PNG, GIF, WEBP
+            </div>
+            
             <!-- Alert Messages -->
             <?php if (isset($_SESSION['success'])): ?>
                 <div class="alert alert-success">
@@ -360,12 +408,6 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-circle"></i>
                     <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                </div>
-            <?php endif; ?>
-            
-            <?php if (isset($_SESSION['debug'])): ?>
-                <div class="debug-info">
-                    <i class="fas fa-bug"></i> Debug: <?php echo $_SESSION['debug']; unset($_SESSION['debug']); ?>
                 </div>
             <?php endif; ?>
             
@@ -456,7 +498,7 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                                             <br>
                                             <small style="color: var(--secondary);"><?php echo substr($product['product_description'], 0, 50); ?>...</small>
                                             <?php if ($product['image']): ?>
-                                                <br><small style="color: #17a2b8;">ไฟล์: <?php echo $product['image']; ?></small>
+                                                <br><small style="color: #17a2b8;">📁 <?php echo $product['image']; ?></small>
                                             <?php endif; ?>
                                         </td>
                                         <td><strong style="color: var(--primary);">฿<?php echo number_format($product['price'], 2); ?></strong></td>
@@ -555,7 +597,7 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                             <label>รูปภาพสินค้า</label>
                             <div class="image-upload" onclick="document.getElementById('addImage').click()">
                                 <i class="fas fa-cloud-upload-alt"></i>
-                                <p>คลิกเพื่อเลือกรูปภาพ (ขนาดไม่เกิน 2MB, JPG/PNG/GIF/WEBP)</p>
+                                <p>คลิกเพื่อเลือกรูปภาพ (ขนาดไม่เกิน 5MB, JPG/PNG/GIF/WEBP)</p>
                                 <input type="file" id="addImage" name="image" accept="image/*" style="display: none;" onchange="previewAddImage(this)">
                             </div>
                             <img id="addImagePreview" class="image-preview" style="display: none;">
@@ -641,7 +683,7 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                             <label>เปลี่ยนรูปภาพใหม่</label>
                             <div class="image-upload" onclick="document.getElementById('editImage').click()">
                                 <i class="fas fa-cloud-upload-alt"></i>
-                                <p>คลิกเพื่อเลือกรูปภาพใหม่ (ขนาดไม่เกิน 2MB, JPG/PNG/GIF/WEBP)</p>
+                                <p>คลิกเพื่อเลือกรูปภาพใหม่ (ขนาดไม่เกิน 5MB, JPG/PNG/GIF/WEBP)</p>
                                 <input type="file" id="editImage" name="image" accept="image/*" style="display: none;" onchange="previewEditImage(this)">
                             </div>
                             <img id="editImagePreview" class="image-preview" style="display: none;">
@@ -740,8 +782,16 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         const preview = document.getElementById('addImagePreview');
         if (input.files && input.files[0]) {
             // Check file size
-            if (input.files[0].size > 2 * 1024 * 1024) {
-                alert('ไฟล์รูปต้องมีขนาดไม่เกิน 2MB (ขนาด: ' + (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB)');
+            if (input.files[0].size > 5 * 1024 * 1024) {
+                alert('ไฟล์รูปต้องมีขนาดไม่เกิน 5MB (ขนาด: ' + (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB)');
+                input.value = '';
+                return;
+            }
+            
+            // Check file type
+            const fileType = input.files[0].type;
+            if (!fileType.match(/image\/(jpeg|jpg|png|gif|webp)/)) {
+                alert('รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น (ชนิดไฟล์: ' + fileType + ')');
                 input.value = '';
                 return;
             }
@@ -759,8 +809,16 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         const preview = document.getElementById('editImagePreview');
         if (input.files && input.files[0]) {
             // Check file size
-            if (input.files[0].size > 2 * 1024 * 1024) {
-                alert('ไฟล์รูปต้องมีขนาดไม่เกิน 2MB (ขนาด: ' + (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB)');
+            if (input.files[0].size > 5 * 1024 * 1024) {
+                alert('ไฟล์รูปต้องมีขนาดไม่เกิน 5MB (ขนาด: ' + (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB)');
+                input.value = '';
+                return;
+            }
+            
+            // Check file type
+            const fileType = input.files[0].type;
+            if (!fileType.match(/image\/(jpeg|jpg|png|gif|webp)/)) {
+                alert('รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น (ชนิดไฟล์: ' + fileType + ')');
                 input.value = '';
                 return;
             }
