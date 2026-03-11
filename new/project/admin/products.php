@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Handle image upload
         $image = '';
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-            $target_dir = "..new/project/assets/images/";
+            $target_dir = "../assets/images/";
             if (!file_exists($target_dir)) {
                 mkdir($target_dir, 0777, true);
             }
@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         $image = $current_image;
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-            $target_dir = "..new/project/assets/images/";
+            $target_dir = "../assets/images/";
             $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
             $new_image = time() . '_' . uniqid() . '.' . $file_extension;
             $target_file = $target_dir . $new_image;
@@ -111,8 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $img_query = $conn->query("SELECT image FROM products WHERE id = $id");
         if ($img_query && $img_query->num_rows > 0) {
             $img = $img_query->fetch_assoc();
-            if ($img['image'] && file_exists("..new/project/assets/images/" . $img['image'])) {
-                unlink("..new/project/assets/images/" . $img['image']);
+            if ($img['image'] && file_exists("../assets/images/" . $img['image'])) {
+                unlink("../assets/images/" . $img['image']);
             }
         }
         
@@ -353,8 +353,8 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
                                 <?php while ($product = $products->fetch_assoc()): ?>
                                     <tr data-category="<?php echo $product['category_id']; ?>" data-store="<?php echo $product['store_id']; ?>">
                                         <td>
-                                            <?php if ($product['image'] && file_exists("..new/project/assets/images/" . $product['image'])): ?>
-                                                <img src="..new/project/assets/images/<?php echo $product['image']; ?>" 
+                                            <?php if ($product['image'] && file_exists("../assets/images/" . $product['image'])): ?>
+                                                <img src="../assets/images/<?php echo $product['image']; ?>" 
                                                      alt="<?php echo $product['product_name']; ?>" 
                                                      class="product-image-thumb">
                                             <?php else: ?>
@@ -587,7 +587,7 @@ $admin = $conn->query("SELECT * FROM users WHERE id = {$_SESSION['user_id']}")->
         document.getElementById('edit_current_image').value = product.image;
         
         if (product.image) {
-            document.getElementById('currentImageDisplay').src = '..new/project/assets/images/' + product.image;
+            document.getElementById('currentImageDisplay').src = '../assets/images/' + product.image;
             document.getElementById('currentImageDisplay').style.display = 'block';
         } else {
             document.getElementById('currentImageDisplay').style.display = 'none';
