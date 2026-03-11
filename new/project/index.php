@@ -20,7 +20,7 @@ $featured_query = "SELECT p.*, c.category_name, s.store_name
                   LEFT JOIN categories c ON p.category_id = c.id 
                   LEFT JOIN stores s ON p.store_id = s.id 
                   ORDER BY p.created_at DESC 
-                  LIMIT 4";
+                  LIMIT 6";
 $featured_products = $conn->query($featured_query);
 
 // Fetch recommended products (สินค้าแนะนำ 24 ชิ้น)
@@ -29,7 +29,7 @@ $recommended_query = "SELECT p.*, c.category_name, s.store_name
                      LEFT JOIN categories c ON p.category_id = c.id 
                      LEFT JOIN stores s ON p.store_id = s.id 
                      ORDER BY RAND() 
-                     LIMIT 8";
+                     LIMIT 24";
 $recommended_products = $conn->query($recommended_query);
 ?>
 
@@ -72,6 +72,9 @@ $recommended_products = $conn->query($recommended_query);
     transition: transform 0.3s;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 380px;
 }
 
 .marquee-item:hover {
@@ -105,6 +108,9 @@ $recommended_products = $conn->query($recommended_query);
 
 .marquee-info {
     padding: 15px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .marquee-info h4 {
@@ -119,7 +125,7 @@ $recommended_products = $conn->query($recommended_query);
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 10px;
+    margin: 10px 0;
 }
 
 .marquee-current {
@@ -132,6 +138,11 @@ $recommended_products = $conn->query($recommended_query);
     font-size: 0.9rem;
     color: var(--medium-gray);
     text-decoration: line-through;
+}
+
+.marquee-info .btn {
+    margin-top: auto;
+    width: 100%;
 }
 
 .marquee-container::before,
@@ -174,6 +185,10 @@ $recommended_products = $conn->query($recommended_query);
     box-shadow: var(--shadow-md);
     transition: all 0.3s;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 500px;
 }
 
 .product-card:hover {
@@ -196,7 +211,7 @@ $recommended_products = $conn->query($recommended_query);
 
 .product-card img {
     width: 100%;
-    height: 200px;
+    height: 250px;
     object-fit: cover;
     transition: transform 0.5s;
 }
@@ -206,7 +221,10 @@ $recommended_products = $conn->query($recommended_query);
 }
 
 .product-card .info {
-    padding: 1.2rem;
+    padding: 1.5rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .product-card .category {
@@ -214,12 +232,15 @@ $recommended_products = $conn->query($recommended_query);
     font-size: 0.8rem;
     font-weight: 600;
     margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .product-card h3 {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 600;
     margin-bottom: 0.3rem;
+    line-height: 1.3;
 }
 
 .product-card .variant {
@@ -229,37 +250,47 @@ $recommended_products = $conn->query($recommended_query);
 }
 
 .product-card .price-section {
-    margin-bottom: 1rem;
+    margin: 1rem 0;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--light-gray);
+    border-bottom: 1px solid var(--light-gray);
 }
 
 .product-card .price {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 1rem;
+    justify-content: space-between;
 }
 
 .product-card .current {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--primary-red);
 }
 
 .product-card .old {
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: var(--medium-gray);
     text-decoration: line-through;
 }
 
 .product-card .actions {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.8rem;
+    margin-top: auto;
 }
 
 .product-card .actions .btn {
     flex: 1;
-    padding: 0.5rem;
-    font-size: 0.9rem;
+    padding: 0.8rem;
+    font-size: 0.95rem;
     text-align: center;
+    border-radius: 8px;
+}
+
+.product-card .actions .btn i {
+    margin-right: 0.3rem;
 }
 
 /* Section Title */
@@ -317,12 +348,21 @@ $recommended_products = $conn->query($recommended_query);
     
     .marquee-item {
         width: 220px;
+        height: 350px;
     }
     
     .section-header {
         flex-direction: column;
         gap: 1rem;
         text-align: center;
+    }
+    
+    .product-card {
+        min-height: 450px;
+    }
+    
+    .product-card img {
+        height: 200px;
     }
 }
 
@@ -393,7 +433,7 @@ $recommended_products = $conn->query($recommended_query);
                                 <span class="marquee-current">฿<?php echo number_format($product['price'], 2); ?></span>
                                 <span class="marquee-old">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
                             </div>
-                            <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary btn-sm" style="width: 100%; margin-top: 10px;">ดูสินค้า</a>
+                            <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">ดูสินค้า</a>
                         </div>
                     </div>
                 <?php endwhile; ?>
@@ -452,10 +492,12 @@ $recommended_products = $conn->query($recommended_query);
                     </div>
                     
                     <div class="actions">
-                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">ดูรายละเอียด</a>
+                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">
+                            <i class="fas fa-eye"></i> ดูรายละเอียด
+                        </a>
                         <?php if (isLoggedIn()): ?>
                             <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
-                                <i class="fas fa-shopping-cart"></i>
+                                <i class="fas fa-shopping-cart"></i> เพิ่มตะกร้า
                             </a>
                         <?php endif; ?>
                     </div>
@@ -510,10 +552,12 @@ $recommended_products = $conn->query($recommended_query);
                     </div>
                     
                     <div class="actions">
-                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">ดูรายละเอียด</a>
+                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">
+                            <i class="fas fa-eye"></i> ดูรายละเอียด
+                        </a>
                         <?php if (isLoggedIn()): ?>
                             <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
-                                <i class="fas fa-shopping-cart"></i>
+                                <i class="fas fa-shopping-cart"></i> เพิ่มตะกร้า
                             </a>
                         <?php endif; ?>
                     </div>
