@@ -1,33 +1,36 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once 'connectdb.php';
 require_once 'includes/config.php';
 include 'includes/new-header.php';
 
-// Fetch featured products (สำหรับส่วนสินค้ามาใหม่ 3 ชิ้น)
+// Fetch products for marquee (8 ชิ้นแรก)
+$marquee_query = "SELECT p.*, c.category_name 
+                 FROM products p 
+                 LEFT JOIN categories c ON p.category_id = c.id 
+                 ORDER BY p.created_at DESC 
+                 LIMIT 8";
+$marquee_products = $conn->query($marquee_query);
+
+// Fetch featured products (สินค้ามาใหม่ 6 ชิ้น)
 $featured_query = "SELECT p.*, c.category_name, s.store_name 
                   FROM products p 
                   LEFT JOIN categories c ON p.category_id = c.id 
                   LEFT JOIN stores s ON p.store_id = s.id 
                   ORDER BY p.created_at DESC 
-                  LIMIT 3";
+                  LIMIT 6";
 $featured_products = $conn->query($featured_query);
 
-// Fetch products for marquee (5 ชิ้นแรก)
-$marquee_query = "SELECT p.*, c.category_name 
-                 FROM products p 
-                 LEFT JOIN categories c ON p.category_id = c.id 
-                 ORDER BY p.created_at DESC 
-                 LIMIT 5";
-$marquee_products = $conn->query($marquee_query);
-
-// Fetch products for grid (15 ชิ้น ถัดมา)
-$grid_query = "SELECT p.*, c.category_name, s.store_name 
-               FROM products p 
-               LEFT JOIN categories c ON p.category_id = c.id 
-               LEFT JOIN stores s ON p.store_id = s.id 
-               ORDER BY p.created_at DESC 
-               LIMIT 15 OFFSET 5";
-$grid_products = $conn->query($grid_query);
+// Fetch recommended products (สินค้าแนะนำ 24 ชิ้น)
+$recommended_query = "SELECT p.*, c.category_name, s.store_name 
+                     FROM products p 
+                     LEFT JOIN categories c ON p.category_id = c.id 
+                     LEFT JOIN stores s ON p.store_id = s.id 
+                     ORDER BY RAND() 
+                     LIMIT 24";
+$recommended_products = $conn->query($recommended_query);
 ?>
 
 <style>
@@ -156,145 +159,117 @@ $grid_products = $conn->query($grid_query);
         rgba(255,255,255,0) 100%);
 }
 
-/* Grid Section - 3x5 */
-.product-grid-vertical {
+/* Product Grid */
+.product-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 2rem;
-    margin: 3rem 0;
+    margin: 2rem 0;
 }
 
-.product-card-vertical {
+.product-card {
     background: white;
     border-radius: 15px;
     overflow: hidden;
     box-shadow: var(--shadow-md);
     transition: all 0.3s;
     position: relative;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
 }
 
-.product-card-vertical:hover {
+.product-card:hover {
     transform: translateY(-5px);
     box-shadow: var(--shadow-xl);
 }
 
-.product-card-vertical .badge {
+.product-card .badge {
     position: absolute;
     top: 10px;
     left: 10px;
     background: var(--gradient-red);
     color: white;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 0.7rem;
+    padding: 5px 15px;
+    border-radius: 25px;
+    font-size: 0.8rem;
     font-weight: 600;
     z-index: 2;
 }
 
-.product-card-vertical .image-container {
-    height: 200px;
-    overflow: hidden;
-    position: relative;
-}
-
-.product-card-vertical img {
+.product-card img {
     width: 100%;
-    height: 100%;
+    height: 200px;
     object-fit: cover;
     transition: transform 0.5s;
 }
 
-.product-card-vertical:hover img {
-    transform: scale(1.1);
+.product-card:hover img {
+    transform: scale(1.05);
 }
 
-.product-card-vertical .info {
+.product-card .info {
     padding: 1.2rem;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
 }
 
-.product-card-vertical .category {
+.product-card .category {
     color: var(--primary-blue);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
     margin-bottom: 0.3rem;
 }
 
-.product-card-vertical h3 {
-    font-size: 1rem;
+.product-card h3 {
+    font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 0.3rem;
-    line-height: 1.3;
-    height: 2.6rem;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
 }
 
-.product-card-vertical .variant {
+.product-card .variant {
     color: var(--medium-gray);
-    font-size: 0.75rem;
-    margin-bottom: 0.5rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.product-card-vertical .price-section {
-    margin-top: auto;
-    padding-top: 0.5rem;
-}
-
-.product-card-vertical .price {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    font-size: 0.8rem;
     margin-bottom: 0.8rem;
 }
 
-.product-card-vertical .current {
-    font-size: 1.1rem;
+.product-card .price-section {
+    margin-bottom: 1rem;
+}
+
+.product-card .price {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.product-card .current {
+    font-size: 1.3rem;
     font-weight: 700;
     color: var(--primary-red);
 }
 
-.product-card-vertical .old {
-    font-size: 0.8rem;
+.product-card .old {
+    font-size: 0.9rem;
     color: var(--medium-gray);
     text-decoration: line-through;
 }
 
-.product-card-vertical .actions {
+.product-card .actions {
     display: flex;
     gap: 0.5rem;
 }
 
-.product-card-vertical .actions .btn {
+.product-card .actions .btn {
     flex: 1;
     padding: 0.5rem;
-    font-size: 0.8rem;
-}
-
-.product-card-vertical .actions .btn i {
-    margin-right: 0.3rem;
+    font-size: 0.9rem;
+    text-align: center;
 }
 
 /* Section Title */
 .section-title {
     text-align: center;
-    margin-bottom: 2rem;
+    margin: 3rem 0 2rem;
 }
 
 .section-title h2 {
-    font-size: 2rem;
+    font-size: 2.2rem;
     font-weight: 700;
     background: var(--gradient-blue);
     -webkit-background-clip: text;
@@ -304,23 +279,38 @@ $grid_products = $conn->query($grid_query);
 
 .section-title p {
     color: var(--medium-gray);
+    font-size: 1.1rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 2rem 0;
+}
+
+.section-header h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--dark);
+}
+
+.view-all {
+    color: var(--primary-blue);
+    text-decoration: none;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.view-all:hover {
+    color: var(--primary-red);
 }
 
 /* Responsive */
-@media (max-width: 1200px) {
-    .product-grid-vertical {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-@media (max-width: 992px) {
-    .product-grid-vertical {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
 @media (max-width: 768px) {
-    .product-grid-vertical {
+    .product-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
     }
@@ -329,14 +319,15 @@ $grid_products = $conn->query($grid_query);
         width: 220px;
     }
     
-    .marquee-container::before,
-    .marquee-container::after {
-        width: 50px;
+    .section-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
     }
 }
 
 @media (max-width: 480px) {
-    .product-grid-vertical {
+    .product-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -359,7 +350,8 @@ $grid_products = $conn->query($grid_query);
     </div>
 </section>
 
-<!-- MARQUEE ROW - สินค้า 5 ชิ้นแรก -->
+<!-- Marquee Row - สินค้ามาแรง -->
+<?php if ($marquee_products->num_rows > 0): ?>
 <section class="featured-section">
     <div class="section-title">
         <h2>⚡ เทรนด์มาแรง</h2>
@@ -371,10 +363,9 @@ $grid_products = $conn->query($grid_query);
             <!-- ทำซ้ำ 2 รอบเพื่อให้เลื่อนต่อเนื่อง -->
             <?php for ($i = 0; $i < 2; $i++): ?>
                 <?php 
-                // Reset pointer to beginning
                 $marquee_products->data_seek(0);
+                while ($product = $marquee_products->fetch_assoc()): 
                 ?>
-                <?php while ($product = $marquee_products->fetch_assoc()): ?>
                     <div class="marquee-item">
                         <?php if ($product['stock'] < 5): ?>
                             <div class="badge">เหลือน้อย</div>
@@ -400,9 +391,7 @@ $grid_products = $conn->query($grid_query);
                             <h4><?php echo htmlspecialchars($product['product_name']); ?></h4>
                             <div class="marquee-price">
                                 <span class="marquee-current">฿<?php echo number_format($product['price'], 2); ?></span>
-                                <?php if ($product['price'] < $product['price'] * 1.2): ?>
-                                    <span class="marquee-old">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
-                                <?php endif; ?>
+                                <span class="marquee-old">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
                             </div>
                             <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary btn-sm" style="width: 100%; margin-top: 10px;">ดูสินค้า</a>
                         </div>
@@ -412,15 +401,17 @@ $grid_products = $conn->query($grid_query);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
-<!-- Featured Products (สินค้ามาใหม่ 3 ชิ้น) -->
+<!-- Featured Products - สินค้ามาใหม่ 6 ชิ้น -->
+<?php if ($featured_products->num_rows > 0): ?>
 <section class="featured-section">
     <div class="section-header">
         <div>
-            <h2>สินค้ามาใหม่</h2>
+            <h2>🆕 สินค้ามาใหม่</h2>
             <p>คัดสรรมาอย่างพิถีพิถันจากคอลเล็กชันระดับพรีเมียมของเรา</p>
         </div>
-        <a href="category.php" class="ดูทั้งหมด">
+        <a href="category.php" class="view-all">
             ดูทั้งหมด <i class="fas fa-arrow-right"></i>
         </a>
     </div>
@@ -428,76 +419,25 @@ $grid_products = $conn->query($grid_query);
     <div class="product-grid">
         <?php while ($product = $featured_products->fetch_assoc()): ?>
             <div class="product-card">
-                <?php if ($product['stock'] < 10): ?>
-                    <div class="product-badge">Limited Stock</div>
-                <?php endif; ?>
-                
-                <?php if ($product['image'] && file_exists("assets/images/" . $product['image'])): ?>
-                    <img src="assets/images/<?php echo $product['image']; ?>" 
-                         alt="<?php echo $product['product_name']; ?>" 
-                         class="product-image">
-                <?php else: ?>
-                    <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
-                         alt="Product" 
-                         class="product-image">
-                <?php endif; ?>
-                
-                <div class="product-info">
-                    <div class="product-category"><?php echo $product['category_name']; ?></div>
-                    <h3 class="product-title"><?php echo $product['product_name']; ?></h3>
-                    <div class="product-variant">Black • 2 Colors Available</div>
-                    <div class="product-price">
-                        <span class="current-price">฿<?php echo number_format($product['price'], 2); ?></span>
-                        <?php if ($product['price'] > 1000): ?>
-                            <span class="old-price">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <div class="product-actions">
-                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">ดูรายละเอียด</a>
-                                    <?php if (isLoggedIn()): ?>
-                                        <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
-                                            <i class="fas fa-shopping-cart"></i>
-                                        </a>
-                                    <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        <?php endwhile; ?>
-    </div>
-</section>
-
-<!-- GRID ROW - สินค้า 15 ชิ้น (3x5) -->
-<?php if ($grid_products->num_rows > 0): ?>
-<section class="featured-section">
-    <div class="section-title">
-        <h2>🛍️ สินค้าแนะนำ</h2>
-        <p>คัดสรรมาอย่างพิถีพิถันจากคอลเล็กชั่นระดับพรีเมี่ยมของเรา</p>
-    </div>
-    
-    <div class="product-grid-vertical">
-        <?php while ($product = $grid_products->fetch_assoc()): ?>
-            <div class="product-card-vertical">
                 <?php if ($product['stock'] < 5): ?>
                     <div class="badge">Limited Stock</div>
                 <?php endif; ?>
                 
-                <div class="image-container">
-                    <?php 
-                    $image_url = "";
-                    if (!empty($product['image'])) {
-                        if (file_exists("assets/images/" . $product['image'])) {
-                            $image_url = "assets/images/" . $product['image'];
-                        } elseif (file_exists("assets/images/stores/" . $product['image'])) {
-                            $image_url = "assets/images/stores/" . $product['image'];
-                        }
+                <?php 
+                $image_url = "";
+                if (!empty($product['image'])) {
+                    if (file_exists("assets/images/" . $product['image'])) {
+                        $image_url = "assets/images/" . $product['image'];
+                    } elseif (file_exists("assets/images/stores/" . $product['image'])) {
+                        $image_url = "assets/images/stores/" . $product['image'];
                     }
-                    
-                    if ($image_url): ?>
-                        <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
-                    <?php else: ?>
-                        <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300" alt="Product">
-                    <?php endif; ?>
-                </div>
+                }
+                
+                if ($image_url): ?>
+                    <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
+                <?php else: ?>
+                    <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400" alt="Product">
+                <?php endif; ?>
                 
                 <div class="info">
                     <div class="category"><?php echo htmlspecialchars($product['category_name'] ?? 'สินค้าทั่วไป'); ?></div>
@@ -507,21 +447,17 @@ $grid_products = $conn->query($grid_query);
                     <div class="price-section">
                         <div class="price">
                             <span class="current">฿<?php echo number_format($product['price'], 2); ?></span>
-                            <?php if ($product['price'] < $product['price'] * 1.2): ?>
-                                <span class="old">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
-                            <?php endif; ?>
+                            <span class="old">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
                         </div>
-                        
-                        <div class="actions">
-                            <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">
-                                <i class="fas fa-eye"></i>
+                    </div>
+                    
+                    <div class="actions">
+                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">ดูรายละเอียด</a>
+                        <?php if (isLoggedIn()): ?>
+                            <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
+                                <i class="fas fa-shopping-cart"></i>
                             </a>
-                            <?php if (isLoggedIn()): ?>
-                                <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
-                                    <i class="fas fa-shopping-cart"></i>
-                                </a>
-                            <?php endif; ?>
-                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -530,8 +466,73 @@ $grid_products = $conn->query($grid_query);
 </section>
 <?php endif; ?>
 
+<!-- Recommended Products - สินค้าแนะนำ 24 ชิ้น -->
+<?php if ($recommended_products->num_rows > 0): ?>
+<section class="featured-section">
+    <div class="section-title">
+        <h2>🌟 สินค้าแนะนำ</h2>
+        <p>คัดสรรมาอย่างพิถีพิถันจากคอลเล็กชั่นระดับพรีเมี่ยมของเรา</p>
+    </div>
+    
+    <div class="product-grid">
+        <?php while ($product = $recommended_products->fetch_assoc()): ?>
+            <div class="product-card">
+                <?php if ($product['stock'] < 5): ?>
+                    <div class="badge">Limited Stock</div>
+                <?php endif; ?>
+                
+                <?php 
+                $image_url = "";
+                if (!empty($product['image'])) {
+                    if (file_exists("assets/images/" . $product['image'])) {
+                        $image_url = "assets/images/" . $product['image'];
+                    } elseif (file_exists("assets/images/stores/" . $product['image'])) {
+                        $image_url = "assets/images/stores/" . $product['image'];
+                    }
+                }
+                
+                if ($image_url): ?>
+                    <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
+                <?php else: ?>
+                    <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400" alt="Product">
+                <?php endif; ?>
+                
+                <div class="info">
+                    <div class="category"><?php echo htmlspecialchars($product['category_name'] ?? 'สินค้าทั่วไป'); ?></div>
+                    <h3><?php echo htmlspecialchars($product['product_name']); ?></h3>
+                    <div class="variant">Black • 2 Colors Available</div>
+                    
+                    <div class="price-section">
+                        <div class="price">
+                            <span class="current">฿<?php echo number_format($product['price'], 2); ?></span>
+                            <span class="old">฿<?php echo number_format($product['price'] * 1.2, 2); ?></span>
+                        </div>
+                    </div>
+                    
+                    <div class="actions">
+                        <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-primary">ดูรายละเอียด</a>
+                        <?php if (isLoggedIn()): ?>
+                            <a href="cart.php?add=<?php echo $product['id']; ?>" class="btn btn-red">
+                                <i class="fas fa-shopping-cart"></i>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php endwhile; ?>
+    </div>
+    
+    <!-- Load More Button -->
+    <div style="text-align: center; margin-top: 3rem;">
+        <a href="category.php" class="btn btn-primary" style="padding: 1rem 3rem;">
+            ดูสินค้าทั้งหมด <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+</section>
+<?php endif; ?>
+
 <!-- Company Info Section -->
-<section class="featured-section" style="text-align: center;">
+<section class="featured-section" style="text-align: center; margin-top: 4rem;">
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem;">
         <div>
             <i class="fas fa-truck" style="font-size: 3rem; color: var(--primary-blue); margin-bottom: 1rem;"></i>
